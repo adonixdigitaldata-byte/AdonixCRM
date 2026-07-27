@@ -105,7 +105,7 @@ export default function DashboardClient({
               <span>Quotations: {quotations.length}</span>
             </div>
           </div>
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="rg-4">
             <div className="card" style={{ padding: '14px 16px', background: 'var(--card-bg)' }}>
               <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Revenue Earned</span>
@@ -169,10 +169,7 @@ export default function DashboardClient({
         </div>
 
         {/* Lead Stats Row */}
-        <div
-          className="grid grid-cols-4 gap-4 mb-6"
-          style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}
-        >
+        <div className="rg-4 mb-6">
           <div className="stat-card">
             <div className="stat-card-label">Total leads</div>
             <div className="stat-card-value">{totalLeads.toLocaleString()}</div>
@@ -194,10 +191,7 @@ export default function DashboardClient({
         </div>
 
         {/* Funnel chart + Source Breakdown */}
-        <div
-          className="grid gap-4 mb-6"
-          style={{ gridTemplateColumns: '1fr 380px' }}
-        >
+        <div className="rg-main-sidebar mb-6">
           {/* Funnel chart */}
           <div className="card">
             <div className="card-header">
@@ -349,10 +343,7 @@ export default function DashboardClient({
         </div>
 
         {/* Recent leads + Follow-ups */}
-        <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: '1fr 380px' }}
-        >
+        <div className="rg-main-sidebar">
           {/* Recent leads */}
           <div className="card">
             <div className="card-header">

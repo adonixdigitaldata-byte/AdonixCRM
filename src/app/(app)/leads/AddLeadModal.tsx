@@ -132,7 +132,7 @@ export default function AddLeadModal({ stages, agents, currentUserId, onClose, o
             </div>
 
             {/* Phone + Email */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="rg-2">
               <div className="form-group">
                 <label className="form-label">Phone</label>
                 <input
@@ -156,7 +156,7 @@ export default function AddLeadModal({ stages, agents, currentUserId, onClose, o
             </div>
 
             {/* City + Interest */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="rg-2">
               <div className="form-group">
                 <label className="form-label">City</label>
                 <input
@@ -178,7 +178,7 @@ export default function AddLeadModal({ stages, agents, currentUserId, onClose, o
             </div>
 
             {/* Source + Stage */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="rg-2">
               <div className="form-group">
                 <label className="form-label">Source</label>
                 <select

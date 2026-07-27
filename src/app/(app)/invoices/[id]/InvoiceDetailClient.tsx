@@ -227,7 +227,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
 
       <div className="page-body">
         {/* Document Banner with Company Logo */}
-        <div className="card" style={{ padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 900 }}>
+        <div className="card doc-banner-card" style={{ padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 900 }}>
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
             <div>
@@ -241,7 +241,8 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, maxWidth: 900 }}>
+        <div className="rg-doc-detail">
+
           <div>
             {/* Client */}
             <div className="card" style={{ marginBottom: 12 }}>
@@ -267,7 +268,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
             <div className="card" style={{ marginBottom: 12 }}>
               <div className="card-header"><span className="text-section-header">Line items</span></div>
               <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
+                <table className="table table-compact">
                   <thead>
                     <tr>
                       <th>Description</th>
@@ -309,7 +310,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
               <div className="card" style={{ marginBottom: 12 }}>
                 <div className="card-header"><span className="text-section-header">Payment history</span></div>
                 <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-                  <table className="table">
+                  <table className="table table-compact">
                     <thead>
                       <tr>
                         <th>Date</th>

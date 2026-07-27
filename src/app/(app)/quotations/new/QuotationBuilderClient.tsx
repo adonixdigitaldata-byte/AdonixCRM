@@ -194,7 +194,7 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
         )}
 
         <form id="quotation-form" onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'flex-start' }}>
+          <div className="rg-builder">
 
             {/* LEFT: Client + Line items */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -241,7 +241,7 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
                       </select>
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="rg-2">
                       <div className="form-group">
                         <label className="form-label form-label-required">Name</label>
                         <input className="form-input" placeholder="Client name" value={clientName} onChange={(e) => setClientName(e.target.value)} required />

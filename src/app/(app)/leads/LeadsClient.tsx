@@ -284,7 +284,7 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
 
       {/* Content */}
       {view === 'kanban' ? (
-        <div style={{ padding: '16px 24px', overflowX: 'auto' }}>
+        <div className="kanban-wrapper" style={{ padding: '16px 24px' }}>
           <KanbanBoard
             leads={leads}
             stages={stages}

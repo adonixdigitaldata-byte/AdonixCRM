@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendAgentInviteEmail } from '@/lib/email'
+import { getAppUrl } from '@/lib/utils/url'
 
 export async function POST(request: NextRequest) {
+
   const supabase = await createServiceClient()
   const { email, name } = await request.json()
 
@@ -10,7 +12,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Email and name are required' }, { status: 400 })
   }
 
-  const callbackUrl = `${request.nextUrl.origin}/reset-password`
+  const appUrl = getAppUrl(request)
+  const callbackUrl = `${appUrl}/reset-password`
+
 
   let userId: string | null = null
   let actionLink: string | null = null

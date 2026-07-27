@@ -262,16 +262,13 @@ export default function LeadDetailClient({
       </div>
 
       {/* Main Two-column Balanced Layout */}
-      <div
-        className="page-body"
-        style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'flex-start' }}
-      >
+      <div className="page-body rg-lead-detail">
         {/* LEFT COLUMN: Main Activity Hub & Dynamic Content */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           
           {/* Lead Overview & Quick Contact Card */}
           <div className="card">
-            <div className="card-body flex items-center justify-between flex-wrap gap-4" style={{ padding: '16px 20px' }}>
+            <div className="card-body flex items-center justify-between flex-wrap gap-4 lead-detail-header-card" style={{ padding: '16px 20px' }}>
               <div className="flex items-center gap-3">
                 <div className="avatar avatar-md" style={{ width: 44, height: 44, fontSize: 16 }}>
                   {(lead.name ?? 'L').slice(0, 2).toUpperCase()}
@@ -794,7 +791,7 @@ export default function LeadDetailClient({
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="rg-2">
                   <div className="form-group">
                     <label className="form-label">Phone</label>
                     <input
@@ -814,7 +811,7 @@ export default function LeadDetailClient({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="rg-2">
                   <div className="form-group">
                     <label className="form-label">City</label>
                     <input

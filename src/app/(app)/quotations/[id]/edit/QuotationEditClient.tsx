@@ -177,7 +177,7 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
       <div className="page-body">
         {error && <div className="alert alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
+        <div className="rg-main-sidebar-sm">
           {/* Main Form */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Client Info */}
@@ -200,7 +200,7 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
                     </select>
                   </div>
                 )}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="rg-2">
                   <div className="form-group">
                     <label className="form-label form-label-required">Client Name</label>
                     <input className="form-input" value={clientName} onChange={(e) => setClientName(e.target.value)} required />
@@ -210,7 +210,7 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
                     <input className="form-input" value={clientCompany} onChange={(e) => setClientCompany(e.target.value)} />
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="rg-2">
                   <div className="form-group">
                     <label className="form-label">Email</label>
                     <input type="email" className="form-input" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />

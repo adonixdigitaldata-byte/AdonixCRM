@@ -64,7 +64,8 @@ export default function InvoicesClient({ invoices }: Props) {
 
       <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Financial Analytics Bar */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+        <div className="rg-stats">
+
           <div className="card" style={{ padding: '14px 16px' }}>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Total Invoiced</span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: 'var(--text-primary)' }}>
@@ -99,8 +100,8 @@ export default function InvoicesClient({ invoices }: Props) {
         </div>
 
         {/* Search & Filter Toolbar */}
-        <div className="flex gap-3 items-center flex-wrap">
-          <div className="search-input-wrapper flex-1" style={{ minWidth: 240, position: 'relative' }}>
+        <div className="toolbar-filters flex gap-3 items-center flex-wrap">
+          <div className="search-input-wrapper flex-1" style={{ position: 'relative' }}>
             <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
             <input
               type="text"

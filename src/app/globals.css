@@ -5,49 +5,51 @@
    ============================================================ */
 :root {
   /* Colors */
-  --bg:              #FAFAFA;
-  --surface:         #FFFFFF;
-  --border:          #E4E4E7;
-  --border-hover:    #D4D4D8;
+  --bg: #FAFAFA;
+  --surface: #FFFFFF;
+  --border: #E4E4E7;
+  --border-hover: #D4D4D8;
 
-  --text-primary:    #18181B;
-  --text-secondary:  #71717A;
-  --text-tertiary:   #A1A1AA;
+  --text-primary: #18181B;
+  --text-secondary: #71717A;
+  --text-tertiary: #A1A1AA;
 
-  --accent:          #4F46E5;
-  --accent-hover:    #4338CA;
-  --accent-light:    #EEF2FF;
+  --accent: #4F46E5;
+  --accent-hover: #4338CA;
+  --accent-light: #EEF2FF;
 
-  --success:         #16A34A;
-  --success-light:   #F0FDF4;
-  --warning:         #D97706;
-  --warning-light:   #FFFBEB;
-  --danger:          #DC2626;
-  --danger-light:    #FEF2F2;
-  --info:            #0284C7;
-  --info-light:      #F0F9FF;
+  --success: #16A34A;
+  --success-light: #F0FDF4;
+  --warning: #D97706;
+  --warning-light: #FFFBEB;
+  --danger: #DC2626;
+  --danger-light: #FEF2F2;
+  --info: #0284C7;
+  --info-light: #F0F9FF;
 
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 
   /* Spacing */
-  --radius:          8px;
-  --radius-sm:       6px;
-  --radius-lg:       12px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
 
   /* Shadows */
-  --shadow-sm:       0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md:       0 4px 12px rgba(0,0,0,0.08);
-  --shadow-lg:       0 8px 24px rgba(0,0,0,0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
 
   /* Sidebar */
-  --sidebar-width:   220px;
+  --sidebar-width: 220px;
 }
 
 /* ============================================================
    RESET & BASE
    ============================================================ */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -57,6 +59,8 @@ html {
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden !important;
+  width: 100% !important;
 }
 
 body {
@@ -64,7 +68,11 @@ body {
   background-color: var(--bg);
   color: var(--text-primary);
   line-height: 1.5;
+  overflow-x: hidden !important;
+  width: 100% !important;
 }
+
+
 
 a {
   color: var(--accent);
@@ -80,7 +88,9 @@ button {
   cursor: pointer;
 }
 
-input, select, textarea {
+input,
+select,
+textarea {
   font-family: var(--font-sans);
 }
 
@@ -482,9 +492,17 @@ textarea.form-input {
   margin-top: 4px;
 }
 
-.trend-up { color: var(--success); }
-.trend-down { color: var(--danger); }
-.trend-neutral { color: var(--text-secondary); }
+.trend-up {
+  color: var(--success);
+}
+
+.trend-down {
+  color: var(--danger);
+}
+
+.trend-neutral {
+  color: var(--text-secondary);
+}
 
 /* ============================================================
    TABLES
@@ -531,7 +549,9 @@ textarea.form-input {
 .table td.num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+
 
 .table td {
   padding: 10px 16px;
@@ -635,7 +655,10 @@ textarea.form-input {
   gap: 12px;
   padding-bottom: 16px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
+
 
 .kanban-column {
   width: 100%;
@@ -877,9 +900,23 @@ textarea.form-input {
   overflow: hidden;
 }
 
-.avatar-sm { width: 24px; height: 24px; font-size: 11px; }
-.avatar-md { width: 32px; height: 32px; font-size: 13px; }
-.avatar-lg { width: 40px; height: 40px; font-size: 16px; }
+.avatar-sm {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.avatar-md {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+
+.avatar-lg {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
 
 /* ============================================================
    MODAL / SLIDE-OVER
@@ -887,7 +924,7 @@ textarea.form-input {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.4);
   z-index: 100;
   display: flex;
   align-items: center;
@@ -1208,9 +1245,17 @@ textarea.form-input {
   max-width: 360px;
 }
 
-.toast.success { background: var(--success); }
-.toast.error { background: var(--danger); }
-.toast.warning { background: var(--warning); }
+.toast.success {
+  background: var(--success);
+}
+
+.toast.error {
+  background: var(--danger);
+}
+
+.toast.warning {
+  background: var(--warning);
+}
 
 /* ============================================================
    LOADING STATES
@@ -1223,8 +1268,13 @@ textarea.form-input {
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .spinner {
@@ -1240,26 +1290,50 @@ textarea.form-input {
    ANIMATIONS
    ============================================================ */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(16px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
@@ -1270,15 +1344,19 @@ textarea.form-input {
    ============================================================ */
 @media print {
   @page {
-    margin: 0 !important;
-    size: auto;
+    margin: 0;
+    size: portrait;
   }
 
-  html, body {
+  html,
+  body {
     margin: 0 !important;
-    padding: 12mm !important;
+    padding: 10mm !important;
+    width: 100% !important;
+    max-width: 100% !important;
     background: white !important;
     color: black !important;
+    overflow: visible !important;
   }
 
   .sidebar,
@@ -1288,22 +1366,62 @@ textarea.form-input {
     display: none !important;
   }
 
-  .main-content {
-    margin-left: 0 !important;
+  .main-content,
+  .page-body {
+    margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
   }
 
-  .page-body {
-    padding: 0 !important;
+  .rg-doc-detail {
+    display: grid !important;
+    grid-template-columns: 1fr 220px !important;
+    gap: 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .doc-banner-card {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .card {
-    border: none !important;
+    border: 1px solid var(--border) !important;
     box-shadow: none !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .table-wrapper {
+    border: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .table-wrapper table,
+  .table {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .table th,
+  .table td {
+    padding: 6px 8px !important;
   }
 }
+
+
+
+
 
 
 /* ============================================================
@@ -1342,54 +1460,590 @@ textarea.form-input {
    UTILITY CLASSES
 
    ============================================================ */
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.items-center { align-items: center; }
-.items-start { align-items: flex-start; }
-.justify-between { justify-content: space-between; }
-.justify-end { justify-content: flex-end; }
-.justify-center { justify-content: center; }
-.gap-2 { gap: 8px; }
-.gap-3 { gap: 12px; }
-.gap-4 { gap: 16px; }
-.gap-6 { gap: 24px; }
-.flex-1 { flex: 1; }
-.w-full { width: 100%; }
-.min-w-0 { min-width: 0; }
-.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.grid { display: grid; }
-.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
-.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
-.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
-.mb-4 { margin-bottom: 16px; }
-.mb-6 { margin-bottom: 24px; }
-.mt-2 { margin-top: 8px; }
-.mt-4 { margin-top: 16px; }
-.p-4 { padding: 16px; }
-.p-6 { padding: 24px; }
-.pt-4 { padding-top: 16px; }
-.pb-4 { padding-bottom: 16px; }
-.text-right { text-align: right; }
-.text-center { text-align: center; }
-.font-mono { font-family: 'Geist Mono', ui-monospace, monospace; }
-.text-danger { color: var(--danger); }
-.text-success { color: var(--success); }
-.text-warning { color: var(--warning); }
-.text-secondary { color: var(--text-secondary); }
-.text-muted { color: var(--text-tertiary); }
-.font-medium { font-weight: 500; }
-.font-semibold { font-weight: 600; }
-.text-sm { font-size: 13px; }
-.text-xs { font-size: 12px; }
-.cursor-pointer { cursor: pointer; }
-.select-none { user-select: none; }
-.overflow-hidden { overflow: hidden; }
-.relative { position: relative; }
-.absolute { position: absolute; }
-.inset-0 { inset: 0; }
-.z-10 { z-index: 10; }
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+.gap-3 {
+  gap: 12px;
+}
+
+.gap-4 {
+  gap: 16px;
+}
+
+.gap-6 {
+  gap: 24px;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grid {
+  display: grid;
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.mb-4 {
+  margin-bottom: 16px;
+}
+
+.mb-6 {
+  margin-bottom: 24px;
+}
+
+.mt-2 {
+  margin-top: 8px;
+}
+
+.mt-4 {
+  margin-top: 16px;
+}
+
+.p-4 {
+  padding: 16px;
+}
+
+.p-6 {
+  padding: 24px;
+}
+
+.pt-4 {
+  padding-top: 16px;
+}
+
+.pb-4 {
+  padding-bottom: 16px;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.font-mono {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+}
+
+.text-danger {
+  color: var(--danger);
+}
+
+.text-success {
+  color: var(--success);
+}
+
+.text-warning {
+  color: var(--warning);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-tertiary);
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.text-sm {
+  font-size: 13px;
+}
+
+.text-xs {
+  font-size: 12px;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.select-none {
+  user-select: none;
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.relative {
+  position: relative;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.inset-0 {
+  inset: 0;
+}
+
+.z-10 {
+  z-index: 10;
+}
+
 .divider {
   height: 1px;
   background: var(--border);
   margin: 16px 0;
+}
+
+/* ============================================================
+   MOBILE HEADER (hidden on desktop, shown on mobile)
+   ============================================================ */
+.mobile-header {
+  display: none;
+}
+
+.mobile-menu-btn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+.sidebar-close-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   MOBILE RESPONSIVE — max-width: 768px
+   Desktop styles are completely untouched above.
+   All rules below only activate on mobile/tablet screens.
+   ============================================================ */
+@media screen and (max-width: 768px) {
+
+  /* --- Mobile Top Header Bar --- */
+  .mobile-header {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 60;
+  }
+
+  .sidebar-close-btn {
+    display: flex;
+  }
+
+  /* --- Sidebar as hidden off-canvas drawer on mobile --- */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 240ms ease;
+    z-index: 70;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* --- Backdrop overlay behind open drawer --- */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 65;
+  }
+
+  /* --- Main content: remove left margin from sidebar, add top pad for mobile header --- */
+  .main-content {
+    margin-left: 0 !important;
+    padding-top: 56px;
+  }
+
+  /* --- Page header: stack title and buttons on small screens --- */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px 12px;
+    position: relative;
+    top: auto;
+  }
+
+  /* --- Page body: reduce side padding on mobile --- */
+  .page-body {
+    padding: 14px 16px;
+  }
+
+  /* --- Tables: horizontal scroll on mobile --- */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* --- Cards: tighter padding on mobile --- */
+  .card-header {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .card-body {
+    padding: 14px 16px;
+  }
+
+  /* --- Filter bar: vertical stack on mobile --- */
+  .filter-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .search-input-wrapper {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* --- Modal: fluid width on mobile --- */
+  .modal-card {
+    width: 92vw !important;
+    max-width: 92vw !important;
+    max-height: 85vh !important;
+    overflow-y: auto;
+  }
+
+  /* --- Stat cards: 2-column on tablet, stacked on mobile --- */
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* --- View toggle buttons: full width, centered labels --- */
+  .view-toggle {
+    width: 100%;
+  }
+
+  .view-toggle-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* --- Prevent ANY horizontal overflow on the app shell --- */
+  .app-shell,
+  .main-content {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* --- Filter bar: smaller text to fit on one screen width --- */
+  .filter-bar {
+    padding: 10px 12px;
+  }
+
+  .filter-select {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  /* --- Kanban: switch from multi-column grid to vertical flex container on mobile --- */
+  .kanban-root {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* On mobile each kanban column auto-sizes to its content and takes full width */
+  .kanban-column {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  /* Cards container: show all cards without inner scroll */
+  .kanban-cards {
+    overflow-y: visible !important;
+    max-height: none !important;
+  }
+
+
+  /* --- Kanban wrapper (the div with padding + overflowX: auto in LeadsClient) --- */
+  .kanban-wrapper {
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  /* --- Toolbar filters: stack vertically on mobile --- */
+  .toolbar-filters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .toolbar-filters .search-input-wrapper {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .toolbar-filters .flex.items-center.gap-2 {
+    width: 100% !important;
+  }
+
+  .toolbar-filters .form-select {
+    flex: 1 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+
+
+@media screen and (max-width: 480px) {
+  /* --- Extra small phones: single column for all grids --- */
+  .grid-cols-4,
+  .grid-cols-3,
+  .grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .page-body {
+    padding: 12px;
+  }
+
+  .text-page-title {
+    font-size: 17px;
+  }
+}
+
+/* ============================================================
+   NAMED RESPONSIVE GRID CLASSES
+   These replace inline style gridTemplateColumns so media
+   queries can properly override them on mobile.
+   ============================================================ */
+
+/* 4-col on desktop → 2-col on tablet → 1-col on phone */
+.rg-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+/* 2-col equal */
+.rg-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* 2-col asymmetric: main + sidebar 380px */
+.rg-main-sidebar {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+}
+
+/* 2-col asymmetric: main + sidebar 320px (builder panels) */
+.rg-builder {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+/* 2-col asymmetric: main + sidebar 300px */
+.rg-main-sidebar-sm {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+/* Document detail layout: content + info panel 280px */
+.rg-doc-detail {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+  max-width: 900px;
+  align-items: start;
+}
+
+/* Lead detail layout: content + side panel 340px */
+.rg-lead-detail {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+/* auto-fit stat cards */
+.rg-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+@media screen and (max-width: 768px) {
+  .rg-4,
+  .rg-stats,
+  .rg-2,
+  .rg-main-sidebar,
+  .rg-main-sidebar-sm,
+  .rg-doc-detail,
+  .rg-lead-detail,
+  .rg-builder {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* --- Lead detail header card optimization --- */
+  .lead-detail-header-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 16px !important;
+  }
+
+  .lead-detail-header-card > .flex:last-child {
+    width: 100% !important;
+    display: flex !important;
+    gap: 8px !important;
+  }
+
+  .lead-detail-header-card > .flex:last-child .btn {
+    flex: 1 !important;
+    justify-content: center !important;
+  }
+
+  /* --- Page header action buttons wrapping --- */
+  .page-header > div:last-child {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .page-header > div:last-child .btn,
+  .page-header > div:last-child a.btn {
+    flex: 1 !important;
+    min-width: 120px !important;
+    justify-content: center !important;
+  }
+
+  /* --- Table min-width to avoid column squeezing, excluding compact tables --- */
+  .table-wrapper table:not(.table-compact) {
+    min-width: 600px !important;
+  }
+
+  /* --- Compact tables that can scale down on mobile --- */
+  .table-compact {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .table-compact th,
+  .table-compact td {
+    padding: 8px 10px !important;
+    font-size: 13px !important;
+  }
+
+  /* --- Document banner card stacking on mobile --- */
+  .doc-banner-card {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .doc-banner-card > div:last-child {
+    text-align: left !important;
+    width: 100% !important;
+  }
 }
