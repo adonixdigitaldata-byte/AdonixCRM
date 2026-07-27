@@ -1,0 +1,321 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { Plus, LayoutGrid, List, Search, X, Filter, SlidersHorizontal } from 'lucide-react'
+import KanbanBoard from './KanbanBoard'
+import LeadsTable from './LeadsTable'
+import AddLeadModal from './AddLeadModal'
+import type { Lead, LeadStage, Profile, AdCampaign } from '@/types/database'
+
+interface Props {
+  profile: Profile
+  stages: LeadStage[]
+  campaigns: { id: string; name: string }[]
+  agents: { id: string; name: string }[]
+  initialSearchParams: Record<string, string | undefined>
+}
+
+export type ViewMode = 'kanban' | 'list'
+
+export default function LeadsClient({ profile, stages, campaigns, agents, initialSearchParams }: Props) {
+  const [view, setView] = useState<ViewMode>('kanban')
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAddModal, setShowAddModal] = useState(initialSearchParams.action === 'add')
+
+  // Filters
+  const [search, setSearch] = useState('')
+  const [filterCampaign, setFilterCampaign] = useState('')
+  const [filterAdSet, setFilterAdSet] = useState('')
+  const [filterAd, setFilterAd] = useState('')
+  const [filterSource, setFilterSource] = useState('')
+  const [filterAgent, setFilterAgent] = useState('')
+  const [filterStage, setFilterStage] = useState('')
+
+  const [adSets, setAdSets] = useState<{ id: string; name: string }[]>([])
+  const [ads, setAds] = useState<{ id: string; name: string }[]>([])
+
+  const supabase = createClient()
+
+  const fetchLeads = useCallback(async () => {
+    setLoading(true)
+    let query = supabase
+      .from('leads')
+      .select(`
+        *,
+        stage:lead_stages(id, key, label, sort_order, color_hex),
+        assigned_agent:profiles(id, name, avatar_url),
+        campaign:ad_campaigns(id, name),
+        ad_set:ad_sets(id, name),
+        ad:ads(id, name, creative_thumbnail_url)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (filterCampaign) query = query.eq('campaign_id', filterCampaign)
+    if (filterAdSet) query = query.eq('ad_set_id', filterAdSet)
+    if (filterAd) query = query.eq('ad_id', filterAd)
+    if (filterSource) query = query.eq('source', filterSource)
+    if (filterAgent) query = query.eq('assigned_agent_id', filterAgent)
+    if (filterStage) query = query.eq('stage_id', filterStage)
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`)
+    }
+
+    // Agents only see their leads
+    if (profile.role === 'AGENT') {
+      query = query.eq('assigned_agent_id', profile.id)
+    }
+
+    const { data } = await query
+    setLeads((data as Lead[]) ?? [])
+    setLoading(false)
+  }, [filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage, search, profile])
+
+  useEffect(() => {
+    fetchLeads()
+  }, [fetchLeads])
+
+  // Cascade: fetch ad sets when campaign changes
+  useEffect(() => {
+    if (!filterCampaign) {
+      setAdSets([])
+      setFilterAdSet('')
+      return
+    }
+    supabase
+      .from('ad_sets')
+      .select('id, name')
+      .eq('campaign_id', filterCampaign)
+      .order('name')
+      .then(({ data }) => setAdSets(data ?? []))
+  }, [filterCampaign])
+
+  // Cascade: fetch ads when ad set changes
+  useEffect(() => {
+    if (!filterAdSet) {
+      setAds([])
+      setFilterAd('')
+      return
+    }
+    supabase
+      .from('ads')
+      .select('id, name')
+      .eq('ad_set_id', filterAdSet)
+      .order('name')
+      .then(({ data }) => setAds(data ?? []))
+  }, [filterAdSet])
+
+  const activeFilterCount = [
+    filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage
+  ].filter(Boolean).length
+
+  function clearAllFilters() {
+    setFilterCampaign('')
+    setFilterAdSet('')
+    setFilterAd('')
+    setFilterSource('')
+    setFilterAgent('')
+    setFilterStage('')
+    setSearch('')
+  }
+
+  return (
+    <div>
+      {/* Page header */}
+      <div className="page-header">
+        <div>
+          <h1 className="text-page-title">Leads</h1>
+          <p className="text-meta" style={{ marginTop: 2 }}>
+            {leads.length} lead{leads.length !== 1 ? 's' : ''}
+            {activeFilterCount > 0 ? ' (filtered)' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="view-toggle">
+            <button
+              className={`view-toggle-btn ${view === 'kanban' ? 'active' : ''}`}
+              onClick={() => setView('kanban')}
+              title="Kanban view"
+            >
+              <LayoutGrid size={14} />
+              Board
+            </button>
+            <button
+              className={`view-toggle-btn ${view === 'list' ? 'active' : ''}`}
+              onClick={() => setView('list')}
+              title="List view"
+            >
+              <List size={14} />
+              List
+            </button>
+          </div>
+
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={14} />
+            Add lead
+          </button>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="filter-bar">
+        {/* Search */}
+        <div className="search-input-wrapper">
+          <Search size={14} />
+          <input
+            className="search-input"
+            placeholder="Search leads..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              style={{
+                position: 'absolute',
+                right: 8,
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-tertiary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+
+        {/* Campaign cascade */}
+        <select
+          className="filter-select"
+          value={filterCampaign}
+          onChange={(e) => setFilterCampaign(e.target.value)}
+        >
+          <option value="">All campaigns</option>
+          {campaigns.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <select
+          className="filter-select"
+          value={filterAdSet}
+          onChange={(e) => setFilterAdSet(e.target.value)}
+          disabled={!filterCampaign}
+        >
+          <option value="">All ad sets</option>
+          {adSets.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+
+        <select
+          className="filter-select"
+          value={filterAd}
+          onChange={(e) => setFilterAd(e.target.value)}
+          disabled={!filterAdSet}
+        >
+          <option value="">All ads</option>
+          {ads.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+
+        {/* Source */}
+        <select
+          className="filter-select"
+          value={filterSource}
+          onChange={(e) => setFilterSource(e.target.value)}
+        >
+          <option value="">All sources</option>
+          <option value="META_ADS">Meta Ads</option>
+          <option value="MANUAL">Manual</option>
+          <option value="XLSX_IMPORT">XLSX Import</option>
+          <option value="WHATSAPP">WhatsApp</option>
+          <option value="TIKTOK">TikTok</option>
+          <option value="SNAPCHAT">Snapchat</option>
+        </select>
+
+        {/* Agent (admin only) */}
+        {profile.role === 'ADMIN' && (
+          <select
+            className="filter-select"
+            value={filterAgent}
+            onChange={(e) => setFilterAgent(e.target.value)}
+          >
+            <option value="">All agents</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Stage */}
+        {view === 'list' && (
+          <select
+            className="filter-select"
+            value={filterStage}
+            onChange={(e) => setFilterStage(e.target.value)}
+          >
+            <option value="">All stages</option>
+            {/* stages imported via prop */}
+          </select>
+        )}
+
+        {/* Clear filters */}
+        {activeFilterCount > 0 && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={clearAllFilters}
+            style={{ color: 'var(--danger)', marginLeft: 4 }}
+          >
+            <X size={13} />
+            Clear filters ({activeFilterCount})
+          </button>
+        )}
+      </div>
+
+      {/* Content */}
+      {view === 'kanban' ? (
+        <div style={{ padding: '16px 24px', overflowX: 'auto' }}>
+          <KanbanBoard
+            leads={leads}
+            stages={stages}
+            loading={loading}
+            onLeadMoved={fetchLeads}
+            currentUserId={profile.id}
+          />
+        </div>
+      ) : (
+        <div style={{ padding: '16px 24px' }}>
+          <LeadsTable
+            leads={leads}
+            loading={loading}
+            onRefresh={fetchLeads}
+          />
+        </div>
+      )}
+
+      {/* Add Lead Modal */}
+      {showAddModal && (
+        <AddLeadModal
+          stages={stages}
+          agents={agents}
+          currentUserId={profile.id}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => {
+            setShowAddModal(false)
+            fetchLeads()
+          }}
+        />
+      )}
+    </div>
+  )
+}

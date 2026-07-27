@@ -1,0 +1,11 @@
+.env.local
+.env*.local
+.next
+node_modules
+*.log
+.DS_Store
+
+# Ignore all markdown files except README
+*.md
+!README.md
+!readme.md
