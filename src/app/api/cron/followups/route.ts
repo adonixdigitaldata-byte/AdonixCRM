@@ -3,6 +3,14 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendFollowupReminderEmail } from '@/lib/email'
 
 export async function GET(request: NextRequest) {
+  // Security authorization check
+  const authHeader = request.headers.get('authorization')
+  const cronSecret = process.env.CRON_SECRET || 'adonix_cron_secret_2026'
+
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const supabase = await createServiceClient()
 
   const now = new Date()
