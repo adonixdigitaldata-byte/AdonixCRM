@@ -254,10 +254,10 @@ export default function LeadDetailClient({
             <Edit2 size={14} />
             Edit lead
           </button>
-          <Link href={`/quotations/create?lead_id=${lead.id}`} className="btn btn-primary btn-sm">
+          {/* <Link href={`/quotations/create?lead_id=${lead.id}`} className="btn btn-primary btn-sm">
             <FileText size={14} />
             Create quotation
-          </Link>
+          </Link> */}
         </div>
       </div>
 

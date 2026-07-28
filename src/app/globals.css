@@ -1958,6 +1958,18 @@ textarea.form-input {
   align-items: start;
 }
 
+/* Responsive flex container */
+.flex-responsive {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Prevent grid items from overflowing and stretching layout columns */
+.rg-lead-detail > div {
+  min-width: 0;
+}
+
 /* Lead detail layout: content + side panel 340px */
 .rg-lead-detail {
   display: grid;
@@ -1973,7 +1985,26 @@ textarea.form-input {
   gap: 16px;
 }
 
+/* Show/hide utility classes */
+.show-mobile {
+  display: none !important;
+}
+.hide-mobile {
+  display: block !important;
+}
+
 @media screen and (max-width: 768px) {
+  .show-mobile {
+    display: flex !important;
+  }
+  .show-mobile.flex-col {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
+
   .rg-4,
   .rg-stats,
   .rg-2,
@@ -2045,5 +2076,71 @@ textarea.form-input {
   .doc-banner-card > div:last-child {
     text-align: left !important;
     width: 100% !important;
+  }
+
+  /* --- Flex responsive stacker on mobile --- */
+  .flex-responsive {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .flex-responsive button {
+    width: 100% !important;
+  }
+}
+
+/* --- Sticky header helper for both desktop and mobile --- */
+.sticky-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 50 !important;
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+@media screen and (max-width: 768px) {
+  .sticky-header {
+    position: sticky !important;
+    top: 56px !important;
+    z-index: 50 !important;
+  }
+}
+
+/* --- Fixed bottom save bar for both desktop and mobile --- */
+.fixed-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 260px; /* Offset for desktop sidebar width */
+  right: 0;
+  height: 64px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  z-index: 40;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+}
+
+@media screen and (max-width: 768px) {
+  .fixed-bottom-bar {
+    left: 0 !important; /* Full width on mobile screens */
+    padding: 0 16px !important;
+  }
+
+  .client-profile-header > div:last-child {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: auto !important;
+    gap: 12px !important;
+  }
+
+  .client-profile-header > div:last-child .btn {
+    flex: none !important;
+    min-width: auto !important;
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    justify-content: center !important;
   }
 }

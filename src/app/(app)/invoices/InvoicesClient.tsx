@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Search, Filter, Plus } from 'lucide-react'
 
@@ -25,6 +26,7 @@ function convertToSAR(amount: number, currency?: string): number {
 }
 
 export default function InvoicesClient({ invoices }: Props) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
@@ -161,7 +163,16 @@ export default function InvoicesClient({ invoices }: Props) {
                   const balance = Number(inv.total) - Number(inv.amount_paid)
                   const isOverdue = inv.status === 'OVERDUE'
                   return (
-                    <tr key={inv.id} className="clickable">
+                    <tr
+                      key={inv.id}
+                      className="clickable"
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement
+                        if (target.tagName !== 'BUTTON' && target.tagName !== 'A' && !target.closest('a') && !target.closest('button')) {
+                          router.push(`/invoices/${inv.id}`)
+                        }
+                      }}
+                    >
                       <td style={{ fontWeight: 600 }}>
                         <Link href={`/invoices/${inv.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                           {inv.invoice_number}

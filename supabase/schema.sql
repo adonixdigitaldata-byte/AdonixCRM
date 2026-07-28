@@ -525,3 +525,26 @@ begin
   where id = agent_id;
 end;
 $$ language plpgsql security definer;
+
+-- ============================================================
+-- 15. CLIENTS RETENTION & ATTRIBUTION EXTENSIONS
+-- ============================================================
+alter table clients add column if not exists assigned_agent_id uuid references profiles(id) on delete set null;
+alter table clients add column if not exists client_status text not null default 'ACTIVE';
+alter table clients add column if not exists industry text;
+alter table clients add column if not exists billing_cycle text not null default 'MONTHLY';
+alter table clients add column if not exists billing_amount numeric(12,2) not null default 0;
+alter table clients add column if not exists contract_start_date date;
+alter table clients add column if not exists contract_end_date date;
+alter table clients add column if not exists website_url text;
+alter table clients add column if not exists report_link text;
+alter table clients add column if not exists gmb_url text;
+alter table clients add column if not exists brand_assets_link text;
+alter table clients add column if not exists facebook_url text;
+alter table clients add column if not exists instagram_url text;
+alter table clients add column if not exists tiktok_url text;
+alter table clients add column if not exists credentials jsonb not null default '[]'::jsonb;
+alter table clients add column if not exists service_links jsonb not null default '[]'::jsonb;
+alter table clients add column if not exists secondary_contacts jsonb not null default '[]'::jsonb;
+alter table clients add column if not exists notes text;
+

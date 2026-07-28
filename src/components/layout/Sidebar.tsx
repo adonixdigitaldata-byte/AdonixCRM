@@ -32,14 +32,14 @@ const adminNav = [
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
     ],
   },
-  {
-    section: 'Finance',
-    items: [
-      { href: '/quotations', label: 'Quotations', icon: FileText },
-      { href: '/invoices', label: 'Invoices', icon: Receipt },
-      { href: '/clients', label: 'Clients', icon: Building2 },
-    ],
-  },
+  // {
+  //   section: 'Finance',
+  //   items: [
+  //     { href: '/quotations', label: 'Quotations', icon: FileText },
+  //     { href: '/invoices', label: 'Invoices', icon: Receipt },
+  //     { href: '/clients', label: 'Clients', icon: Building2 },
+  //   ],
+  // },
   {
     section: 'Settings',
     items: [
@@ -58,14 +58,14 @@ const agentNav = [
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
     ],
   },
-  {
-    section: 'Finance',
-    items: [
-      { href: '/quotations', label: 'Quotations', icon: FileText },
-      { href: '/invoices', label: 'Invoices', icon: Receipt },
-      { href: '/clients', label: 'Clients', icon: Building2 },
-    ],
-  },
+  // {
+  //   section: 'Finance',
+  //   items: [
+  //     { href: '/quotations', label: 'Quotations', icon: FileText },
+  //     { href: '/invoices', label: 'Invoices', icon: Receipt },
+  //     { href: '/clients', label: 'Clients', icon: Building2 },
+  //   ],
+  // },
 ]
 
 export default function Sidebar({ profile }: SidebarProps) {

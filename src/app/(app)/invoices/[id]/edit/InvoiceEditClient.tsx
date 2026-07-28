@@ -213,7 +213,7 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
             {/* Line Items */}
             <div className="card">
               <div className="card-header"><span className="text-section-header">Line items</span></div>
-              <div style={{ overflowX: 'auto' }}>
+              <div className="hide-mobile" style={{ overflowX: 'auto' }}>
                 <table className="table" style={{ minWidth: 600 }}>
                   <thead>
                     <tr>
@@ -270,6 +270,70 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="show-mobile flex-col gap-3" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+                {items.map((item, index) => (
+                  <div key={item.id} className="card" style={{ padding: 14, background: 'var(--bg)', border: '1px solid var(--border)', marginBottom: 0 }}>
+                    <div className="flex justify-between items-center" style={{ marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Item #{index + 1}</span>
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-icon btn-xs"
+                          onClick={() => removeItem(item.id)}
+                          style={{ color: 'var(--danger)' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <div className="form-group">
+                        <label className="form-label" style={{ fontSize: 11 }}>Description</label>
+                        <input
+                          className="form-input"
+                          placeholder="Description"
+                          value={item.description}
+                          onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                          style={{ fontSize: 13 }}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: 11 }}>Qty</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className="form-input"
+                            value={item.qty}
+                            onChange={(e) => updateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
+                            style={{ fontSize: 13 }}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: 11 }}>Unit price</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className="form-input"
+                            value={item.unit_price}
+                            onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                            style={{ fontSize: 13 }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center" style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Amount</span>
+                        <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {currency} {item.amount.toLocaleString('en', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="card-footer">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>

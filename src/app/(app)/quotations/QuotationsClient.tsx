@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { Plus, Search, Filter } from 'lucide-react'
 
@@ -25,6 +26,7 @@ function convertToSAR(amount: number, currency?: string): number {
 }
 
 export default function QuotationsClient({ quotations }: Props) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
@@ -150,7 +152,16 @@ export default function QuotationsClient({ quotations }: Props) {
                 {filtered.map((q: any) => {
                   const curr = q.currency ?? 'SAR'
                   return (
-                    <tr key={q.id} className="clickable">
+                    <tr
+                      key={q.id}
+                      className="clickable"
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement
+                        if (target.tagName !== 'BUTTON' && target.tagName !== 'A' && !target.closest('a') && !target.closest('button')) {
+                          router.push(`/quotations/${q.id}`)
+                        }
+                      }}
+                    >
                       <td style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         <Link href={`/quotations/${q.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                           {q.quote_number}

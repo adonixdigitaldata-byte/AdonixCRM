@@ -86,9 +86,9 @@ export default function DashboardClient({
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/quotations/new" className="btn btn-outline btn-sm">
+          {/* <Link href="/quotations/new" className="btn btn-outline btn-sm">
             <Plus size={14} /> New quotation
-          </Link>
+          </Link> */}
           <Link href="/leads?action=add" className="btn btn-primary btn-sm">
             <Plus size={14} /> Add lead
           </Link>
@@ -365,64 +365,120 @@ export default function DashboardClient({
                 </Link>
               </div>
             ) : (
-              <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Phone</th>
-                      <th>Stage</th>
-                      <th>Source</th>
-                      <th>Added</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentLeads.map((lead: any) => (
-                      <tr
-                        key={lead.id}
-                        className="clickable"
-                        onClick={() => (window.location.href = `/leads/${lead.id}`)}
-                      >
-                        <td style={{ fontWeight: 500 }}>{lead.name ?? '—'}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>
-                          {lead.phone ?? '—'}
-                        </td>
-                        <td>
-                          {lead.stage && (
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 5,
-                                fontSize: 12,
-                              }}
-                            >
+              <>
+                <div className="table-wrapper hide-mobile" style={{ border: 'none', borderRadius: 0 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Stage</th>
+                        <th>Source</th>
+                        <th>Added</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentLeads.map((lead: any) => (
+                        <tr
+                          key={lead.id}
+                          className="clickable"
+                          onClick={() => (window.location.href = `/leads/${lead.id}`)}
+                        >
+                          <td style={{ fontWeight: 500 }}>{lead.name ?? '—'}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>
+                            {lead.phone ?? '—'}
+                          </td>
+                          <td>
+                            {lead.stage && (
                               <span
                                 style={{
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: '50%',
-                                  background: lead.stage.color_hex,
-                                  flexShrink: 0,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  fontSize: 12,
                                 }}
-                              />
-                              {lead.stage.label}
+                              >
+                                <span
+                                  style={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: '50%',
+                                    background: lead.stage.color_hex,
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {lead.stage.label}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <span className="badge badge-default" style={{ fontSize: 11 }}>
+                              {SOURCE_LABELS[lead.source] ?? lead.source}
                             </span>
-                          )}
-                        </td>
-                        <td>
-                          <span className="badge badge-default" style={{ fontSize: 11 }}>
+                          </td>
+                          <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                            {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="show-mobile flex-col" style={{ borderTop: '1px solid var(--border)' }}>
+                  {recentLeads.map((lead: any, i: number) => (
+                    <div
+                      key={lead.id}
+                      className="clickable"
+                      onClick={() => (window.location.href = `/leads/${lead.id}`)}
+                      style={{
+                        padding: '12px 20px',
+                        borderBottom: i < recentLeads.length - 1 ? '1px solid var(--border)' : 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {lead.name ?? 'Unnamed Lead'}
+                        </span>
+                        {lead.stage && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              fontSize: 11,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                background: lead.stage.color_hex,
+                                flexShrink: 0,
+                              }}
+                            />
+                            {lead.stage.label}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-meta" style={{ fontSize: 12 }}>
+                        <span>{lead.phone ?? '—'}</span>
+                        <div className="flex gap-2">
+                          <span className="badge badge-default" style={{ fontSize: 10, padding: '2px 6px' }}>
                             {SOURCE_LABELS[lead.source] ?? lead.source}
                           </span>
-                        </td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
-                          {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          <span>{formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
