@@ -146,6 +146,7 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className="kanban-cards"
+        style={{ touchAction: 'pan-y' }}
       >
         <SortableContext
           items={leads.map((l) => l.id)}

@@ -694,26 +694,31 @@ textarea.form-input {
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
     gap: 12px;
     padding-bottom: 12px;
     width: 100%;
   }
 
   .kanban-column {
-    flex: 0 0 84vw;
-    width: 84vw;
-    min-width: 84vw;
-    max-width: 84vw;
+    flex: 0 0 85vw;
+    width: 85vw;
+    min-width: 85vw;
+    max-width: 85vw;
     scroll-snap-align: start;
     height: auto;
   }
 
   .kanban-cards {
-    height: 300px !important;
-    max-height: 300px !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding: 2px;
+  }
+
+  .kanban-card {
+    touch-action: pan-y;
   }
 }
 
@@ -1938,34 +1943,9 @@ textarea.form-input {
     font-size: 13px;
   }
 
-  /* --- Kanban: switch from multi-column grid to vertical flex container on mobile --- */
-  .kanban-root {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 16px !important;
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-
-  /* On mobile each kanban column auto-sizes to its content and takes full width */
-  .kanban-column {
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-  }
-
-  /* Cards container: show all cards without inner scroll */
-  .kanban-cards {
-    overflow-y: visible !important;
-    max-height: none !important;
-  }
-
-
   /* --- Kanban wrapper (the div with padding + overflowX: auto in LeadsClient) --- */
   .kanban-wrapper {
-    padding: 12px;
+    padding: 8px 0;
     overflow-x: hidden;
   }
 
