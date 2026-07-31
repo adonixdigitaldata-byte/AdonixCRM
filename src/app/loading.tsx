@@ -34,7 +34,7 @@ export default function RootLoading() {
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, marginTop: 8 }}>
-        <Loader2 size={20} className="spin" style={{ color: 'var(--accent)' }} />
+        <Loader2 size={22} className="spin" style={{ color: 'var(--accent)', animation: 'spin 0.75s linear infinite' }} />
       </div>
     </div>
   )

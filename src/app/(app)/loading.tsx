@@ -29,7 +29,7 @@ export default function AppLoading() {
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, fontWeight: 500 }}>
-        <Loader2 size={18} className="spin" style={{ color: 'var(--accent)' }} />
+        <Loader2 size={20} className="spin" style={{ color: 'var(--accent)', animation: 'spin 0.75s linear infinite' }} />
         <span>Loading...</span>
       </div>
     </div>
