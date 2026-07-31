@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, ArrowLeft } from 'lucide-react'
 import type { Profile } from '@/types/database'
+import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
 
 interface LineItem {
   id: string
@@ -226,19 +227,20 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
                   {useExistingClient ? (
                     <div className="form-group">
                       <label className="form-label form-label-required">Select client</label>
-                      <select
-                        className="form-input"
-                        value={selectedClientId}
-                        onChange={(e) => setSelectedClientId(e.target.value)}
-                        required
-                      >
-                        <option value="">Choose a client...</option>
-                        {existingClients.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}{c.company ? ` (${c.company})` : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <ClientSearchSelect
+                        clients={existingClients}
+                        selectedClientId={selectedClientId}
+                        onSelectClient={(client) => {
+                          setSelectedClientId(client.id)
+                          if (client.id) {
+                            setClientName(client.name ?? '')
+                            setClientCompany(client.company ?? '')
+                            setClientEmail(client.email ?? '')
+                            setClientPhone(client.phone ?? '')
+                            setClientAddress(client.address ?? '')
+                          }
+                        }}
+                      />
                     </div>
                   ) : (
                     <div className="rg-2">
@@ -260,7 +262,7 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
                       </div>
                       <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                         <label className="form-label">Address</label>
-                        <textarea className="form-input" placeholder="Full address" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} rows={2} />
+                        <textarea className="form-input" placeholder="Full address" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} rows={3} style={{ resize: 'vertical' }} />
                       </div>
                     </div>
                   )}

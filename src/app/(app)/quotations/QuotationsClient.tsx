@@ -30,6 +30,22 @@ export default function QuotationsClient({ quotations }: Props) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
+  // Helper to determine if a quotation is expired
+  function getIsQuotationExpired(q: any): boolean {
+    if (q.status === 'ACCEPTED' || q.status === 'REJECTED') {
+      return false
+    }
+    if (q.status === 'EXPIRED') return true
+    if (q.valid_until) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const validUntil = new Date(q.valid_until)
+      validUntil.setHours(0, 0, 0, 0)
+      return today > validUntil
+    }
+    return false
+  }
+
   // Search & Status filtering
   const filtered = quotations.filter((q) => {
     const qNum = (q.quote_number ?? '').toLowerCase()
@@ -38,14 +54,18 @@ export default function QuotationsClient({ quotations }: Props) {
     const query = search.toLowerCase().trim()
 
     const matchesSearch = !query || qNum.includes(query) || cName.includes(query) || cComp.includes(query)
-    const matchesStatus = statusFilter === 'ALL' || q.status === statusFilter
+    const isExpired = getIsQuotationExpired(q)
+    const effectiveStatus = isExpired ? 'EXPIRED' : q.status
+    const matchesStatus = statusFilter === 'ALL' || effectiveStatus === statusFilter
 
     return matchesSearch && matchesStatus
   })
 
   const totalQuoted = filtered.reduce((acc, q) => acc + convertToSAR(Number(q.total), q.currency), 0)
   const acceptedValue = filtered.filter((q) => q.status === 'ACCEPTED').reduce((acc, q) => acc + convertToSAR(Number(q.total), q.currency), 0)
-  const pendingValue = filtered.filter((q) => q.status === 'DRAFT' || q.status === 'SENT').reduce((acc, q) => acc + convertToSAR(Number(q.total), q.currency), 0)
+  const pendingValue = filtered
+    .filter((q) => !getIsQuotationExpired(q) && (q.status === 'DRAFT' || q.status === 'SENT'))
+    .reduce((acc, q) => acc + convertToSAR(Number(q.total), q.currency), 0)
   const acceptedCount = filtered.filter((q) => q.status === 'ACCEPTED').length
 
   return (
@@ -151,6 +171,8 @@ export default function QuotationsClient({ quotations }: Props) {
               <tbody>
                 {filtered.map((q: any) => {
                   const curr = q.currency ?? 'SAR'
+                  const isExpired = getIsQuotationExpired(q)
+                  const displayStatus = isExpired ? 'EXPIRED' : q.status
                   return (
                     <tr
                       key={q.id}
@@ -176,14 +198,14 @@ export default function QuotationsClient({ quotations }: Props) {
                         </Link>
                       </td>
                       <td>
-                        <span className={`badge ${STATUS_BADGE[q.status] ?? 'badge-default'}`}>
-                          {q.status}
+                        <span className={`badge ${STATUS_BADGE[displayStatus] ?? 'badge-default'}`}>
+                          {displayStatus}
                         </span>
                       </td>
                       <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                         {format(new Date(q.issue_date), 'dd MMM yyyy')}
                       </td>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                      <td style={{ color: isExpired ? 'var(--warning)' : 'var(--text-secondary)', fontSize: 13, fontWeight: isExpired ? 600 : 400 }}>
                         {q.valid_until ? format(new Date(q.valid_until), 'dd MMM yyyy') : '—'}
                       </td>
                       <td className="num tabular-nums" style={{ fontWeight: 600 }}>

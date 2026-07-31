@@ -112,6 +112,7 @@ create table if not exists leads (
   email text,
   city text,
   interest text,
+  potential_value numeric(12,2) default 0.00,
 
   -- Full original form submission
   form_data jsonb not null default '{}',

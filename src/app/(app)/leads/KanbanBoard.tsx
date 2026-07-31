@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   DndContext,
   DragOverlay,
   closestCenter,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
@@ -19,7 +20,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
-import { Phone, Globe, FileUp, MessageCircle } from 'lucide-react'
+import { Phone, Globe, FileUp, MessageCircle, GripVertical } from 'lucide-react'
 import type { Lead, LeadStage } from '@/types/database'
 
 interface Props {
@@ -65,23 +66,47 @@ function KanbanCard({ lead }: { lead: Lead }) {
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
       className={`kanban-card ${isDragging ? 'dragging' : ''}`}
       onClick={(e) => {
-        // Only navigate if not dragging
         if (!isDragging) {
           e.stopPropagation()
           router.push(`/leads/${lead.id}`)
         }
       }}
     >
-      <div className="kanban-card-name">{lead.name ?? 'Unknown'}</div>
-      <div className="kanban-card-meta">
-        <span className="kanban-card-phone">
-          {SOURCE_ICONS[lead.source] ?? <Globe size={11} />}
-          {lead.phone ?? lead.email ?? '—'}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="kanban-card-name" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            {lead.name ?? 'Unknown'}
+          </div>
+          <div className="kanban-card-meta">
+            <span className="kanban-card-phone">
+              {SOURCE_ICONS[lead.source] ?? <Globe size={11} />}
+              {lead.phone ?? lead.email ?? '—'}
+            </span>
+          </div>
+        </div>
+
+        {/* Dedicated Drag Handle Icon — attaches dnd listeners here ONLY so touch scrolling works everywhere else */}
+        <div
+          {...listeners}
+          style={{
+            cursor: 'grab',
+            padding: '2px 4px',
+            color: 'var(--text-tertiary)',
+            touchAction: 'none',
+            borderRadius: 4,
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
+          title="Drag to move stage"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical size={14} />
+        </div>
       </div>
+
       <div className="kanban-card-footer">
         <span className="kanban-days-badge">
           {daysInStage === 0 ? 'Today' : `${daysInStage}d`}
@@ -107,6 +132,7 @@ function KanbanColumn({
 
   return (
     <div
+      id={`kanban-col-${stage.id}`}
       className="kanban-column"
       style={{
         borderTop: `3px solid ${stage.color_hex}`,
@@ -117,7 +143,10 @@ function KanbanColumn({
         <span className="kanban-column-title">{stage.label}</span>
         <span className="kanban-count-pill">{leads.length}</span>
       </div>
-      <div ref={setNodeRef} className="kanban-cards">
+      <div
+        ref={setNodeRef}
+        className="kanban-cards"
+      >
         <SortableContext
           items={leads.map((l) => l.id)}
           strategy={verticalListSortingStrategy}
@@ -135,16 +164,29 @@ function KanbanColumn({
 
 export default function KanbanBoard({ leads, stages, loading, onLeadMoved, currentUserId }: Props) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
+  const [selectedStageId, setSelectedStageId] = useState<string>(stages[0]?.id ?? '')
+  const boardRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 },
     })
   )
 
   function getLeadsForStage(stageId: string) {
     return leads.filter((l) => l.stage_id === stageId)
+  }
+
+  function handleStageTabClick(stageId: string) {
+    setSelectedStageId(stageId)
+    const colElement = document.getElementById(`kanban-col-${stageId}`)
+    if (colElement) {
+      colElement.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
+    }
   }
 
   function handleDragStart(event: any) {
@@ -161,19 +203,14 @@ export default function KanbanBoard({ leads, stages, loading, onLeadMoved, curre
     const lead = leads.find((l) => l.id === leadId)
     if (!lead) return
 
-    // over.id can be a stage id or another lead id
     let targetStageId = over.id as string
-
-    // If dropped on a lead card, find that lead's stage
     const targetLead = leads.find((l) => l.id === targetStageId)
     if (targetLead) targetStageId = targetLead.stage_id
 
     if (targetStageId === lead.stage_id) return
 
-    // Optimistic update
     const oldStageId = lead.stage_id
 
-    // Update in Supabase
     const { error } = await supabase
       .from('leads')
       .update({ stage_id: targetStageId, updated_at: new Date().toISOString() })
@@ -184,7 +221,6 @@ export default function KanbanBoard({ leads, stages, loading, onLeadMoved, curre
       return
     }
 
-    // Log stage history
     await supabase.from('lead_stage_history').insert({
       lead_id: leadId,
       from_stage_id: oldStageId,
@@ -192,7 +228,6 @@ export default function KanbanBoard({ leads, stages, loading, onLeadMoved, curre
       changed_by: currentUserId,
     })
 
-    // Log activity
     const toStage = stages.find((s) => s.id === targetStageId)
     const fromStage = stages.find((s) => s.id === oldStageId)
     await supabase.from('lead_activities').insert({
@@ -238,7 +273,57 @@ export default function KanbanBoard({ leads, stages, loading, onLeadMoved, curre
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="kanban-root">
+      {/* Mobile Stage Selector Quick Pills */}
+      <div
+        className="show-mobile-only"
+        style={{
+          display: 'flex',
+          gap: 8,
+          overflowX: 'auto',
+          paddingBottom: 10,
+          marginBottom: 10,
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        {stages.map((s) => {
+          const count = getLeadsForStage(s.id).length
+          const isSelected = selectedStageId === s.id
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => handleStageTabClick(s.id)}
+              style={{
+                padding: '5px 12px',
+                borderRadius: 100,
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                border: `1px solid ${isSelected ? s.color_hex : 'var(--border)'}`,
+                background: isSelected ? s.color_hex + '18' : 'var(--surface)',
+                color: isSelected ? s.color_hex : 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color_hex }} />
+              {s.label}
+              <span style={{
+                fontSize: 10, padding: '1px 5px', borderRadius: 10,
+                background: isSelected ? s.color_hex : 'var(--bg)',
+                color: isSelected ? '#fff' : 'var(--text-tertiary)',
+              }}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="kanban-root" ref={boardRef}>
         {stages.map((stage) => (
           <KanbanColumn
             key={stage.id}

@@ -7,7 +7,7 @@ import { formatDistanceToNow, format } from 'date-fns'
 import {
   ArrowLeft, Phone, Mail, MapPin, Tag, User, Clock,
   MessageSquare, CheckCircle, Plus, X, Globe, Activity,
-  FileText, ChevronDown, Edit2, MessageCircle, ExternalLink, Trash2,
+  FileText, ChevronDown, Edit2, MessageCircle, ExternalLink, Trash2, AlertCircle, DollarSign,
 } from 'lucide-react'
 import type { Lead, LeadStage, Profile, LeadNote, LeadFollowup, LeadActivity } from '@/types/database'
 import Link from 'next/link'
@@ -29,6 +29,8 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   NOTE_DELETED: <Trash2 size={12} />,
   FOLLOWUP_SCHEDULED: <Clock size={12} />,
   FOLLOWUP_COMPLETED: <CheckCircle size={12} />,
+  FOLLOWUP_UPDATED: <Edit2 size={12} />,
+  FOLLOWUP_DELETED: <Trash2 size={12} />,
   QUOTE_SENT: <FileText size={12} />,
   INVOICE_SENT: <FileText size={12} />,
   ASSIGNED: <User size={12} />,
@@ -43,7 +45,9 @@ function activityText(a: LeadActivity): string {
     case 'NOTE_ADDED': return 'Note added'
     case 'NOTE_DELETED': return 'Note deleted'
     case 'FOLLOWUP_SCHEDULED': return `Follow-up scheduled for ${m?.date ? format(new Date(m.date), 'dd MMM') : '—'}`
-    case 'FOLLOWUP_COMPLETED': return 'Follow-up marked complete'
+    case 'FOLLOWUP_COMPLETED': return `Follow-up marked complete${m?.outcome ? ': ' + m.outcome.slice(0, 60) : ''}`
+    case 'FOLLOWUP_UPDATED': return 'Follow-up rescheduled'
+    case 'FOLLOWUP_DELETED': return 'Follow-up deleted'
     case 'QUOTE_SENT': return `Quotation ${m?.quote_number ?? ''} sent`
     case 'INVOICE_SENT': return `Invoice ${m?.invoice_number ?? ''} sent`
     case 'ASSIGNED': return `Assigned to ${m?.agent_name ?? '—'}`
@@ -78,6 +82,7 @@ export default function LeadDetailClient({
     email: lead.email ?? '',
     city: lead.city ?? '',
     interest: lead.interest ?? '',
+    potential_value: (lead as any).potential_value ?? (lead as any).form_data?.potential_value ?? '',
   })
   const [editLoading, setEditLoading] = useState(false)
 
@@ -85,29 +90,76 @@ export default function LeadDetailClient({
   const [noteText, setNoteText] = useState('')
   const [noteLoading, setNoteLoading] = useState(false)
 
-  // Follow-up form
+  // Follow-up form (schedule new)
   const [showFollowupForm, setShowFollowupForm] = useState(false)
   const [fuDate, setFuDate] = useState('')
   const [fuNote, setFuNote] = useState('')
   const [fuLoading, setFuLoading] = useState(false)
+
+  // Follow-up edit state
+  const [editingFollowupId, setEditingFollowupId] = useState<string | null>(null)
+  const [editFuDate, setEditFuDate] = useState('')
+  const [editFuNote, setEditFuNote] = useState('')
+  const [editFuOutcome, setEditFuOutcome] = useState('')
+  const [editFuLoading, setEditFuLoading] = useState(false)
+
+  // Follow-up completion modal state
+  const [completingFollowupId, setCompletingFollowupId] = useState<string | null>(null)
+  const [outcomeNote, setOutcomeNote] = useState('')
+  const [completeLoading, setCompleteLoading] = useState(false)
+
+  // Delete Lead modal state
+  const [showDeleteLeadModal, setShowDeleteLeadModal] = useState(false)
+  const [deleteLeadLoading, setDeleteLeadLoading] = useState(false)
+  const [deleteLeadError, setDeleteLeadError] = useState('')
 
   // Stage & Agent loading
   const [stageLoading, setStageLoading] = useState(false)
   const [agentLoading, setAgentLoading] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
 
+  async function handleDeleteLead() {
+    if (deleteLeadLoading) return
+    setDeleteLeadLoading(true)
+    setDeleteLeadError('')
+    try {
+      const res = await fetch('/api/leads/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: lead.id }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        router.push('/leads')
+      } else {
+        setDeleteLeadError(data.error || 'Failed to delete lead')
+        setDeleteLeadLoading(false)
+      }
+    } catch (err) {
+      setDeleteLeadError('Error deleting lead')
+      setDeleteLeadLoading(false)
+    }
+  }
+
+  const [editError, setEditError] = useState('')
+
   async function handleEditSubmit(e: React.FormEvent) {
     e.preventDefault()
     setEditLoading(true)
+    setEditError('')
 
-    const updatedData = {
+    const parsedVal = editForm.potential_value ? parseFloat(editForm.potential_value) : null
+
+    const updatedData: any = {
       name: editForm.name.trim() || null,
       phone: editForm.phone.trim() || null,
       email: editForm.email.trim() || null,
       city: editForm.city.trim() || null,
       interest: editForm.interest.trim() || null,
+      potential_value: parsedVal,
     }
 
+    // Try updating DB
     const { error } = await supabase
       .from('leads')
       .update(updatedData)
@@ -116,6 +168,8 @@ export default function LeadDetailClient({
     if (!error) {
       setLead({ ...lead, ...updatedData })
       setShowEditModal(false)
+    } else {
+      setEditError(error.message || 'Failed to update lead details')
     }
     setEditLoading(false)
   }
@@ -179,9 +233,7 @@ export default function LeadDetailClient({
     if (!error) {
       setNotes(notes.filter((n) => n.id !== noteId))
       const { data: act } = await supabase.from('lead_activities').insert({
-        lead_id: lead.id,
-        activity_type: 'NOTE_DELETED',
-        performed_by: profile.id,
+        lead_id: lead.id, activity_type: 'NOTE_DELETED', performed_by: profile.id,
       }).select('*, performer:profiles(id, name)').single()
       if (act) setActivities([act as any, ...activities])
     }
@@ -203,17 +255,94 @@ export default function LeadDetailClient({
     setFuDate(''); setFuNote(''); setShowFollowupForm(false); setFuLoading(false)
   }
 
-  async function completeFollowup(fuId: string) {
-    await supabase.from('lead_followups').update({
-      is_completed: true, completed_at: new Date().toISOString(),
-    }).eq('id', fuId)
-    await supabase.from('lead_activities').insert({
-      lead_id: lead.id, activity_type: 'FOLLOWUP_COMPLETED', performed_by: profile.id,
-    })
-    setFollowups(followups.map((f) => f.id === fuId ? { ...f, is_completed: true } : f))
+  // Open edit form for a follow-up
+  function startEditFollowup(fu: LeadFollowup) {
+    setEditingFollowupId(fu.id)
+    const d = new Date(fu.scheduled_at)
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    setEditFuDate(local)
+    setEditFuNote(fu.note ?? '')
+    setEditFuOutcome(fu.outcome_note ?? '')
   }
 
-  const formDataEntries = Object.entries(lead.form_data ?? {})
+  async function saveEditFollowup(fuId: string) {
+    if (!editFuDate || editFuLoading) return
+    setEditFuLoading(true)
+    const { error } = await supabase.from('lead_followups').update({
+      scheduled_at: new Date(editFuDate).toISOString(),
+      note: editFuNote.trim() || null,
+      outcome_note: editFuOutcome.trim() || null,
+    }).eq('id', fuId)
+
+    if (!error) {
+      setFollowups(followups.map((f) =>
+        f.id === fuId
+          ? {
+              ...f,
+              scheduled_at: new Date(editFuDate).toISOString(),
+              note: editFuNote.trim() || null,
+              outcome_note: editFuOutcome.trim() || null,
+            }
+          : f
+      ))
+      const { data: act } = await supabase.from('lead_activities').insert({
+        lead_id: lead.id, activity_type: 'FOLLOWUP_UPDATED', performed_by: profile.id,
+        metadata: { date: editFuDate },
+      }).select('*, performer:profiles(id, name)').single()
+      if (act) setActivities([act as any, ...activities])
+      setEditingFollowupId(null)
+    }
+    setEditFuLoading(false)
+  }
+
+  async function handleDeleteFollowup(fuId: string) {
+    const { error } = await supabase.from('lead_followups').delete().eq('id', fuId)
+    if (!error) {
+      setFollowups(followups.filter((f) => f.id !== fuId))
+      const { data: act } = await supabase.from('lead_activities').insert({
+        lead_id: lead.id, activity_type: 'FOLLOWUP_DELETED', performed_by: profile.id,
+      }).select('*, performer:profiles(id, name)').single()
+      if (act) setActivities([act as any, ...activities])
+    }
+  }
+
+  // Open completion outcome modal
+  function openCompleteModal(fuId: string) {
+    setCompletingFollowupId(fuId)
+    setOutcomeNote('')
+  }
+
+  async function submitCompleteFollowup(e: React.FormEvent) {
+    e.preventDefault()
+    if (!completingFollowupId || completeLoading) return
+    setCompleteLoading(true)
+
+    await supabase.from('lead_followups').update({
+      is_completed: true,
+      completed_at: new Date().toISOString(),
+      outcome_note: outcomeNote.trim() || null,
+    }).eq('id', completingFollowupId)
+
+    const { data: act } = await supabase.from('lead_activities').insert({
+      lead_id: lead.id, activity_type: 'FOLLOWUP_COMPLETED', performed_by: profile.id,
+      metadata: { outcome: outcomeNote.trim() || null },
+    }).select('*, performer:profiles(id, name)').single()
+
+    setFollowups(followups.map((f) =>
+      f.id === completingFollowupId
+        ? { ...f, is_completed: true, completed_at: new Date().toISOString(), outcome_note: outcomeNote.trim() || null }
+        : f
+    ))
+    if (act) setActivities([act as any, ...activities])
+
+    setCompletingFollowupId(null)
+    setOutcomeNote('')
+    setCompleteLoading(false)
+  }
+
+  const formDataEntries = Object.entries(lead.form_data ?? {}).filter(
+    ([k]) => k !== 'potential_value' && k !== 'potentialValue'
+  )
   const cleanPhone = lead.phone ? lead.phone.replace(/[^0-9]/g, '') : ''
   const whatsappUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : null
   const telUrl = lead.phone ? `tel:${lead.phone}` : null
@@ -237,7 +366,22 @@ export default function LeadDetailClient({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href={`/quotations/new?lead_id=${lead.id}`}
+            className="btn btn-primary btn-sm"
+            style={{
+              gap: 6,
+              background: 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)',
+              borderColor: 'transparent',
+              color: '#ffffff',
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)',
+              fontWeight: 500,
+            }}
+          >
+            <FileText size={14} />
+            Create Quotation
+          </Link>
           <button
             className="btn btn-outline btn-sm"
             onClick={() => {
@@ -247,6 +391,7 @@ export default function LeadDetailClient({
                 email: lead.email ?? '',
                 city: lead.city ?? '',
                 interest: lead.interest ?? '',
+                potential_value: (lead as any).potential_value ?? (lead as any).form_data?.potential_value ?? '',
               })
               setShowEditModal(true)
             }}
@@ -254,10 +399,16 @@ export default function LeadDetailClient({
             <Edit2 size={14} />
             Edit lead
           </button>
-          {/* <Link href={`/quotations/create?lead_id=${lead.id}`} className="btn btn-primary btn-sm">
-            <FileText size={14} />
-            Create quotation
-          </Link> */}
+          {profile.role === 'ADMIN' && (
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => setShowDeleteLeadModal(true)}
+            >
+              <Trash2 size={14} />
+              Delete lead
+            </button>
+          )}
         </div>
       </div>
 
@@ -294,6 +445,9 @@ export default function LeadDetailClient({
                   </div>
                   <p className="text-meta" style={{ marginTop: 2 }}>
                     Source: <strong style={{ color: 'var(--text-primary)' }}>{lead.source.replace('_', ' ')}</strong> · Assigned to: <strong style={{ color: 'var(--text-primary)' }}>{(lead as any).assigned_agent?.name ?? 'Unassigned'}</strong>
+                    {((lead as any).potential_value || (lead as any).form_data?.potential_value) && (
+                      <> · Potential Earning: <strong style={{ color: 'var(--success)' }}>SAR {Number((lead as any).potential_value || (lead as any).form_data?.potential_value).toLocaleString('en', { minimumFractionDigits: 2 })}</strong></>
+                    )}
                   </p>
                 </div>
               </div>
@@ -301,11 +455,7 @@ export default function LeadDetailClient({
               {/* Direct Contact CTAs */}
               <div className="flex items-center gap-2">
                 {telUrl && (
-                  <a
-                    href={telUrl}
-                    className="btn btn-outline btn-sm"
-                    style={{ gap: 6 }}
-                  >
+                  <a href={telUrl} className="btn btn-outline btn-sm" style={{ gap: 6 }}>
                     <Phone size={14} />
                     Call
                   </a>
@@ -323,11 +473,7 @@ export default function LeadDetailClient({
                   </a>
                 )}
                 {mailtoUrl && (
-                  <a
-                    href={mailtoUrl}
-                    className="btn btn-outline btn-sm"
-                    style={{ gap: 6 }}
-                  >
+                  <a href={mailtoUrl} className="btn btn-outline btn-sm" style={{ gap: 6 }}>
                     <Mail size={14} />
                     Email
                   </a>
@@ -433,9 +579,9 @@ export default function LeadDetailClient({
                       Schedule follow-up
                     </button>
                   ) : (
-                    <form onSubmit={addFollowup} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <form onSubmit={addFollowup} style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
                       <div className="form-group">
-                        <label className="form-label">Date & time</label>
+                        <label className="form-label">Date &amp; time</label>
                         <input
                           type="datetime-local"
                           className="form-input"
@@ -472,38 +618,160 @@ export default function LeadDetailClient({
                   ) : (
                     followups.map((fu) => {
                       const isOverdue = !fu.is_completed && new Date(fu.scheduled_at) < new Date()
+                      const isPending30 = isOverdue && (new Date().getTime() - new Date(fu.scheduled_at).getTime()) > 30 * 60 * 1000
+                      const isEditing = editingFollowupId === fu.id
+
                       return (
                         <div
                           key={fu.id}
                           style={{
-                            padding: '12px 14px',
-                            background: fu.is_completed ? 'var(--success-light)' : isOverdue ? 'var(--danger-light)' : 'var(--bg)',
                             border: `1px solid ${fu.is_completed ? 'var(--success)' : isOverdue ? 'var(--danger)' : 'var(--border)'}`,
                             borderRadius: 'var(--radius-sm)',
-                            opacity: fu.is_completed ? 0.7 : 1,
+                            overflow: 'hidden',
                           }}
                         >
-                          <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-                            <span style={{
-                              fontSize: 13, fontWeight: 600,
-                              color: fu.is_completed ? 'var(--success)' : isOverdue ? 'var(--danger)' : 'var(--text-primary)',
-                            }}>
-                              {format(new Date(fu.scheduled_at), 'dd MMM yyyy, HH:mm')}
-                            </span>
-                            {!fu.is_completed && (
-                              <button
-                                className="btn btn-ghost btn-xs"
-                                onClick={() => completeFollowup(fu.id)}
-                                style={{ color: 'var(--success)' }}
-                              >
-                                <CheckCircle size={13} />
-                                Mark complete
-                              </button>
+                          {/* Follow-up header */}
+                          <div style={{
+                            padding: '12px 14px',
+                            background: fu.is_completed ? 'var(--success-light)' : isOverdue ? 'var(--danger-light)' : 'var(--bg)',
+                          }}>
+                            {isEditing ? (
+                              // EDIT FORM (inline)
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                  <label className="form-label" style={{ fontSize: 11 }}>Scheduled time</label>
+                                  <input
+                                    type="datetime-local"
+                                    className="form-input"
+                                    value={editFuDate}
+                                    onChange={(e) => setEditFuDate(e.target.value)}
+                                    required
+                                  />
+                                </div>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                  <label className="form-label" style={{ fontSize: 11 }}>Note / Plan</label>
+                                  <textarea
+                                    className="form-input"
+                                    value={editFuNote}
+                                    onChange={(e) => setEditFuNote(e.target.value)}
+                                    rows={2}
+                                    placeholder="Follow-up plan notes..."
+                                  />
+                                </div>
+                                {fu.is_completed && (
+                                  <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label className="form-label" style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>Outcome / Discussion Notes</label>
+                                    <textarea
+                                      className="form-input"
+                                      value={editFuOutcome}
+                                      onChange={(e) => setEditFuOutcome(e.target.value)}
+                                      rows={2}
+                                      placeholder="Edit discussed outcome..."
+                                      style={{ border: '1px solid #bbf7d0', background: '#f0fdf4' }}
+                                    />
+                                  </div>
+                                )}
+                                <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
+                                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => setEditingFollowupId(null)}>
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-xs"
+                                    onClick={() => saveEditFollowup(fu.id)}
+                                    disabled={editFuLoading}
+                                  >
+                                    {editFuLoading ? 'Saving...' : 'Save changes'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              // DISPLAY MODE
+                              <>
+                                <div className="flex items-center justify-between" style={{ marginBottom: fu.note || fu.outcome_note ? 6 : 0 }}>
+                                  <div className="flex items-center gap-2">
+                                    <span style={{
+                                      fontSize: 13, fontWeight: 600,
+                                      color: fu.is_completed ? 'var(--success)' : isOverdue ? 'var(--danger)' : 'var(--text-primary)',
+                                    }}>
+                                      {format(new Date(fu.scheduled_at), 'dd MMM yyyy, HH:mm')}
+                                    </span>
+                                    {fu.is_completed && (
+                                      <span style={{
+                                        fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 20,
+                                        background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0',
+                                      }}>
+                                        Completed
+                                      </span>
+                                    )}
+                                    {isPending30 && !fu.is_completed && (
+                                      <span style={{
+                                        fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 20,
+                                        background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa',
+                                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                                      }}>
+                                        <AlertCircle size={9} /> Pending
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Action buttons */}
+                                  <div className="flex items-center gap-1">
+                                    {!fu.is_completed && (
+                                      <button
+                                        className="btn btn-ghost btn-xs"
+                                        onClick={() => openCompleteModal(fu.id)}
+                                        style={{ color: 'var(--success)', gap: 4 }}
+                                        title="Mark as complete"
+                                      >
+                                        <CheckCircle size={13} />
+                                        <span className="hide-mobile">Mark complete</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      className="btn btn-ghost btn-icon btn-xs"
+                                      onClick={() => startEditFollowup(fu)}
+                                      style={{ color: 'var(--text-secondary)' }}
+                                      title="Edit follow-up"
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
+                                    {(profile.role === 'ADMIN' || fu.agent_id === profile.id) && (
+                                      <button
+                                        className="btn btn-ghost btn-icon btn-xs"
+                                        onClick={() => handleDeleteFollowup(fu.id)}
+                                        style={{ color: 'var(--text-tertiary)' }}
+                                        title="Delete follow-up"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {fu.note && (
+                                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: fu.outcome_note ? 4 : 0 }}>
+                                    <span style={{ fontWeight: 500, color: 'var(--text-tertiary)', fontSize: 11 }}>Plan: </span>
+                                    {fu.note}
+                                  </p>
+                                )}
+                                {fu.outcome_note && (
+                                  <div style={{
+                                    marginTop: 8, padding: '8px 10px',
+                                    background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                    borderRadius: 'var(--radius-sm)',
+                                  }}>
+                                    <p style={{ fontSize: 11, fontWeight: 600, color: '#16a34a', marginBottom: 2 }}>
+                                      Outcome / Discussion
+                                    </p>
+                                    <p style={{ fontSize: 13, color: '#166534', whiteSpace: 'pre-wrap' }}>
+                                      {fu.outcome_note}
+                                    </p>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
-                          {fu.note && (
-                            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{fu.note}</p>
-                          )}
                         </div>
                       )
                     })
@@ -631,6 +899,7 @@ export default function LeadDetailClient({
                     email: lead.email ?? '',
                     city: lead.city ?? '',
                     interest: lead.interest ?? '',
+                    potential_value: (lead as any).potential_value ?? (lead as any).form_data?.potential_value ?? '',
                   })
                   setShowEditModal(true)
                 }}
@@ -704,9 +973,23 @@ export default function LeadDetailClient({
 
               <div className="flex items-center gap-3">
                 <span style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}><Tag size={14} /></span>
-                <span className="text-label" style={{ width: 56, flexShrink: 0 }}>Interest</span>
+                <span className="text-label" style={{ width: 90, flexShrink: 0 }}>Interest</span>
                 <span style={{ fontSize: 13, color: lead.interest ? 'var(--text-primary)' : 'var(--text-tertiary)', fontWeight: lead.interest ? 500 : 400 }}>
                   {lead.interest ?? '—'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}><DollarSign size={14} /></span>
+                <span className="text-label" style={{ width: 90, flexShrink: 0 }}>Potential Earning</span>
+                <span style={{
+                  fontSize: 13,
+                  color: ((lead as any).potential_value || (lead as any).form_data?.potential_value) ? 'var(--success)' : 'var(--text-tertiary)',
+                  fontWeight: ((lead as any).potential_value || (lead as any).form_data?.potential_value) ? 600 : 400
+                }}>
+                  {((lead as any).potential_value || (lead as any).form_data?.potential_value)
+                    ? `SAR ${Number((lead as any).potential_value || (lead as any).form_data?.potential_value).toLocaleString('en', { minimumFractionDigits: 2 })}`
+                    : '—'}
                 </span>
               </div>
             </div>
@@ -734,10 +1017,7 @@ export default function LeadDetailClient({
                     gap: 8,
                   }}
                 >
-                  <span style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: stage.color_hex, flexShrink: 0,
-                  }} />
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: stage.color_hex, flexShrink: 0 }} />
                   {stage.label}
                 </button>
               ))}
@@ -751,17 +1031,28 @@ export default function LeadDetailClient({
               {agentLoading && <span className="spinner" style={{ width: 14, height: 14 }} />}
             </div>
             <div className="card-body">
-              <select
-                className="form-input"
-                value={lead.assigned_agent_id ?? ''}
-                onChange={(e) => handleAgentChange(e.target.value)}
-                disabled={agentLoading}
-              >
-                <option value="">Unassigned</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
+              {profile.role === 'ADMIN' ? (
+                <select
+                  className="form-input"
+                  value={lead.assigned_agent_id ?? ''}
+                  onChange={(e) => handleAgentChange(e.target.value)}
+                  disabled={agentLoading}
+                >
+                  <option value="">Unassigned</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                  <div className="avatar avatar-sm" style={{ width: 28, height: 28, fontSize: 12 }}>
+                    {lead.assigned_agent ? lead.assigned_agent.name.slice(0, 2).toUpperCase() : 'U'}
+                  </div>
+                  <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                    {lead.assigned_agent?.name ?? 'Unassigned'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -770,7 +1061,7 @@ export default function LeadDetailClient({
 
       {/* EDIT LEAD MODAL */}
       {showEditModal && (
-        <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+        <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowEditModal(false) }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Edit lead details</h2>
@@ -781,6 +1072,11 @@ export default function LeadDetailClient({
 
             <form onSubmit={handleEditSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {editError && (
+                  <div className="alert alert-danger" style={{ padding: '8px 12px', fontSize: 13 }}>
+                    {editError}
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label form-label-required">Name</label>
                   <input
@@ -829,6 +1125,19 @@ export default function LeadDetailClient({
                     />
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Potential Earning (SAR)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    className="form-input"
+                    placeholder="e.g. 5000"
+                    value={editForm.potential_value}
+                    onChange={(e) => setEditForm({ ...editForm, potential_value: e.target.value })}
+                  />
+                </div>
               </div>
 
               <div className="modal-footer">
@@ -840,6 +1149,104 @@ export default function LeadDetailClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* COMPLETION OUTCOME MODAL */}
+      {completingFollowupId && (
+        <div className="modal-backdrop" onClick={() => setCompletingFollowupId(null)}>
+          <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Mark follow-up complete</h2>
+                <p className="text-meta" style={{ marginTop: 2 }}>Record what was discussed or the outcome</p>
+              </div>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setCompletingFollowupId(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={submitCompleteFollowup}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                  background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--radius-sm)',
+                }}>
+                  <CheckCircle size={16} style={{ color: '#16a34a', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: '#166534' }}>
+                    This follow-up will be marked as completed with the current timestamp.
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Outcome / Discussion notes
+                    <span style={{ color: 'var(--text-tertiary)', fontWeight: 400, marginLeft: 4 }}>(optional)</span>
+                  </label>
+                  <textarea
+                    className="form-input"
+                    placeholder="What was discussed? What's the next step? Any decisions made..."
+                    value={outcomeNote}
+                    onChange={(e) => setOutcomeNote(e.target.value)}
+                    rows={4}
+                    style={{ resize: 'vertical', minHeight: 100 }}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setCompletingFollowupId(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={completeLoading}>
+                  <CheckCircle size={14} />
+                  {completeLoading ? 'Saving...' : 'Mark as complete'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE LEAD CONFIRMATION MODAL */}
+      {showDeleteLeadModal && (
+        <div className="modal-backdrop" onClick={() => setShowDeleteLeadModal(false)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title" style={{ color: 'var(--danger)' }}>Delete Lead</h2>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowDeleteLeadModal(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {deleteLeadError && (
+                <div className="alert alert-danger" style={{ padding: '8px 12px', fontSize: 13 }}>
+                  {deleteLeadError}
+                </div>
+              )}
+              <p style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                Are you sure you want to delete lead <strong>"{lead.name ?? 'Unnamed Lead'}"</strong>?
+              </p>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                All associated notes, follow-ups, and activity history for this lead will be permanently deleted. This action cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={() => setShowDeleteLeadModal(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleDeleteLead}
+                disabled={deleteLeadLoading}
+              >
+                <Trash2 size={14} />
+                {deleteLeadLoading ? 'Deleting...' : 'Yes, Delete Lead'}
+              </button>
+            </div>
           </div>
         </div>
       )}

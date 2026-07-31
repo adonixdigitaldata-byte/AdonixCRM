@@ -3,11 +3,8 @@ import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import LeadDetailClient from './LeadDetailClient'
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params
-  const supabase = await createClient()
-  const { data: lead } = await supabase.from('leads').select('name').eq('id', id).single()
-  return { title: lead?.name ?? 'Lead detail' }
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: 'Lead detail' }
 }
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,10 +13,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-
   const [
+    { data: profile },
     { data: lead },
     { data: stages },
     { data: agents },
@@ -27,6 +22,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     { data: followups },
     { data: activities },
   ] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
     supabase.from('leads').select(`
       *,
       stage:lead_stages(*),

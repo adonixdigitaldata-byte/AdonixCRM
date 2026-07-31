@@ -32,18 +32,21 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Public routes that don't need auth
-  const publicRoutes = ['/login', '/reset-password', '/auth/callback', '/api/webhooks', '/api/cron']
+  const publicRoutes = ['/login', '/reset-password', '/auth/callback', '/api/webhooks', '/api/cron', '/api/agents/invite']
   const isPublic = publicRoutes.some((r) => pathname.startsWith(r))
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    url.searchParams.set('redirectTo', pathname + request.nextUrl.search)
     return NextResponse.redirect(url)
   }
 
   if (user && pathname === '/login') {
+    const redirectTo = request.nextUrl.searchParams.get('redirectTo') || '/dashboard'
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = redirectTo.startsWith('/') ? redirectTo : '/dashboard'
+    url.searchParams.delete('redirectTo')
     return NextResponse.redirect(url)
   }
 

@@ -4,17 +4,32 @@ import { sendAgentInviteEmail } from '@/lib/email'
 import { getAppUrl } from '@/lib/utils/url'
 
 export async function POST(request: NextRequest) {
-
   const supabase = await createServiceClient()
-  const { email, name } = await request.json()
+  const body = await request.json()
+  const { email, name, mode } = body
 
-  if (!email || !name) {
-    return NextResponse.json({ error: 'Email and name are required' }, { status: 400 })
+  if (!email) {
+    return NextResponse.json({ error: 'Email address is required' }, { status: 400 })
   }
 
   const appUrl = getAppUrl(request)
   const callbackUrl = `${appUrl}/reset-password`
 
+  // If in forgot-password mode, verify user exists first
+  if (mode === 'forgot') {
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id, name')
+      .eq('email', email.trim())
+      .maybeSingle()
+
+    if (!existingProfile) {
+      return NextResponse.json(
+        { error: `No account found for "${email}". Please ask your CRM Administrator to invite you.` },
+        { status: 404 }
+      )
+    }
+  }
 
   let userId: string | null = null
   let actionLink: string | null = null
@@ -22,10 +37,10 @@ export async function POST(request: NextRequest) {
   // 1. Try to generate an invite link for a new user
   const { data: inviteData, error: inviteError } = await supabase.auth.admin.generateLink({
     type: 'invite',
-    email,
+    email: email.trim(),
     options: {
       redirectTo: callbackUrl,
-      data: { name, role: 'AGENT' },
+      data: { name: name || email.split('@')[0], role: 'AGENT' },
     },
   })
 
@@ -36,14 +51,14 @@ export async function POST(request: NextRequest) {
     // 2. If user already exists, generate a recovery/reset password link instead
     const { data: recoveryData, error: recoveryError } = await supabase.auth.admin.generateLink({
       type: 'recovery',
-      email,
+      email: email.trim(),
       options: {
         redirectTo: callbackUrl,
       },
     })
 
     if (recoveryError) {
-      return NextResponse.json({ error: recoveryError.message }, { status: 400 })
+      return NextResponse.json({ error: recoveryError.message ?? 'Failed to generate reset link for user' }, { status: 400 })
     }
 
     actionLink = recoveryData.properties?.action_link ?? null

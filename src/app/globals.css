@@ -249,23 +249,38 @@ textarea {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: calc(100vw - var(--sidebar-width));
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    max-width: 100vw;
+  }
 }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 16px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   position: sticky;
   top: 0;
   z-index: 20;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .page-body {
   flex: 1;
-  padding: 24px;
+  padding: 20px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* ============================================================
@@ -509,7 +524,9 @@ textarea.form-input {
    ============================================================ */
 .table-wrapper {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -659,7 +676,6 @@ textarea.form-input {
   max-width: 100%;
 }
 
-
 .kanban-column {
   width: 100%;
   min-width: 0;
@@ -668,10 +684,49 @@ textarea.form-input {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  height: 38vh;
-  min-height: 290px;
-  max-height: 420px;
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .kanban-root {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 12px;
+    width: 100%;
+  }
+
+  .kanban-column {
+    flex: 0 0 84vw;
+    width: 84vw;
+    min-width: 84vw;
+    max-width: 84vw;
+    scroll-snap-align: start;
+    height: auto;
+  }
+
+  .kanban-cards {
+    height: 300px !important;
+    max-height: 300px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-mobile-only {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .hide-mobile-only {
+    display: none !important;
+  }
 }
 
 .kanban-column-header {
@@ -708,7 +763,25 @@ textarea.form-input {
   flex-direction: column;
   gap: 6px;
   min-height: 80px;
-  overflow-y: auto;
+  height: 360px;
+  max-height: 360px;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+/* Custom Visible Scrollbar for kanban-cards */
+.kanban-cards::-webkit-scrollbar {
+  width: 5px;
+  display: block;
+}
+.kanban-cards::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+}
+.kanban-cards::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 4px;
 }
 
 .kanban-card {
@@ -716,7 +789,7 @@ textarea.form-input {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  cursor: grab;
+  cursor: pointer;
   transition: box-shadow 150ms ease, border-color 150ms ease;
   user-select: none;
 }
@@ -924,8 +997,10 @@ textarea.form-input {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 100;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -933,23 +1008,29 @@ textarea.form-input {
   animation: fadeIn 150ms ease;
 }
 
-.modal {
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+.modal,
+.modal-box,
+.modal-card {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 560px;
+  max-width: 540px;
   max-height: 90vh;
   overflow-y: auto;
-  animation: slideUp 150ms ease;
+  animation: slideUp 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
 }
 
 .modal-header {
-  padding: 20px 24px 16px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--surface, #ffffff);
+  border-radius: var(--radius-lg, 12px) var(--radius-lg, 12px) 0 0;
 }
 
 .modal-title {
@@ -960,6 +1041,7 @@ textarea.form-input {
 
 .modal-body {
   padding: 20px 24px;
+  background: var(--surface, #ffffff);
 }
 
 .modal-footer {
@@ -968,9 +1050,9 @@ textarea.form-input {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  background: var(--bg);
-  border-radius: 0 0 var(--radius) var(--radius);
+  gap: 10px;
+  background: var(--bg, #fafafa);
+  border-radius: 0 0 var(--radius-lg, 12px) var(--radius-lg, 12px);
 }
 
 .slideover {
@@ -1344,14 +1426,14 @@ textarea.form-input {
    ============================================================ */
 @media print {
   @page {
-    margin: 0;
+    margin: 15mm 12mm;
     size: portrait;
   }
 
   html,
   body {
     margin: 0 !important;
-    padding: 10mm !important;
+    padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     background: white !important;
@@ -1397,8 +1479,31 @@ textarea.form-input {
     box-shadow: none !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    margin-bottom: 14px !important;
     width: 100% !important;
     max-width: 100% !important;
+  }
+
+  .card.card-allow-break,
+  .table-wrapper,
+  .table {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  .table thead {
+    display: table-header-group !important;
+  }
+
+  .table tbody tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .table tfoot {
+    display: table-row-group !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   .table-wrapper {

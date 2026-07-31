@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
-import { ArrowLeft, Plus, CheckCircle, Printer, Edit2, Trash2, XCircle, RotateCcw, Send } from 'lucide-react'
+import { ArrowLeft, Plus, CheckCircle, Printer, Edit2, Trash2, XCircle, RotateCcw, Send, AlertTriangle, X } from 'lucide-react'
 
 import type { Invoice, Profile, Payment } from '@/types/database'
 
@@ -43,6 +43,21 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
 
   const curr = invoice.currency ?? 'SAR'
   const balance = Number(invoice.total) - Number(invoice.amount_paid)
+
+  const isOverdue = (() => {
+    if (invoice.status === 'PAID' || invoice.status === 'CANCELLED' || invoice.status === 'DRAFT') {
+      return false
+    }
+    if (invoice.status === 'OVERDUE') return true
+    if (invoice.due_date) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const dueDate = new Date(invoice.due_date)
+      dueDate.setHours(0, 0, 0, 0)
+      return today > dueDate
+    }
+    return false
+  })()
 
   function openPaymentForm() {
     setEditingPaymentId(null)
@@ -118,44 +133,116 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
     if (updatedPayments) setPayments(updatedPayments as any)
   }
 
+  // Modal states for deleting invoice & payments
+  const [payError, setPayError] = useState('')
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
+  const [deletePaymentLoading, setDeletePaymentLoading] = useState(false)
+  const [deletePaymentError, setDeletePaymentError] = useState('')
+
+  const [showDeleteInvoiceModal, setShowDeleteInvoiceModal] = useState(false)
+  const [deleteInvoiceLoading, setDeleteInvoiceLoading] = useState(false)
+  const [deleteInvoiceError, setDeleteInvoiceError] = useState('')
+
   async function recordOrUpdatePayment(e: React.FormEvent) {
     e.preventDefault()
     if (!payAmount || saving) return
     setSaving(true)
+    setPayError('')
 
-    const amt = parseFloat(payAmount)
-
-    if (editingPaymentId) {
-      await supabase.from('payments').update({
-        amount: amt,
-        method: payMethod,
-        paid_at: payDate,
-        reference_note: payRef.trim() || null,
-      }).eq('id', editingPaymentId)
-    } else {
-      await supabase.from('payments').insert({
-        invoice_id: invoice.id,
-        amount: amt,
-        method: payMethod,
-        paid_at: payDate,
-        reference_note: payRef.trim() || null,
-        recorded_by: profile.id,
+    try {
+      const res = await fetch('/api/invoices/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: editingPaymentId ? 'UPDATE' : 'RECORD',
+          invoiceId: invoice.id,
+          paymentId: editingPaymentId,
+          amount: parseFloat(payAmount),
+          method: payMethod,
+          paidAt: payDate,
+          referenceNote: payRef.trim() || null,
+        }),
       })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        if (data.invoice) setInvoice(data.invoice)
+        if (data.payments) setPayments(data.payments)
+        setPayAmount('')
+        setPayRef('')
+        setShowPaymentForm(false)
+        setEditingPaymentId(null)
+      } else {
+        setPayError(data.error || 'Failed to save payment')
+      }
+    } catch (err: any) {
+      console.error('Payment error:', err)
+      setPayError('Error recording payment')
     }
-
-    await syncInvoiceBalanceAndStatus(invoice.id)
-    setPayAmount(''); setPayRef(''); setShowPaymentForm(false); setEditingPaymentId(null); setSaving(false)
-  }
-
-  async function deletePayment(paymentId: string) {
-    if (!confirm('Are you sure you want to delete this payment record?')) return
-    setSaving(true)
-    await supabase.from('payments').delete().eq('id', paymentId)
-
-    await syncInvoiceBalanceAndStatus(invoice.id)
     setSaving(false)
   }
 
+  function openDeletePaymentModal(paymentId: string) {
+    setDeletingPaymentId(paymentId)
+    setDeletePaymentError('')
+  }
+
+  async function confirmDeletePayment() {
+    if (!deletingPaymentId) return
+    setDeletePaymentLoading(true)
+    setDeletePaymentError('')
+    try {
+      const res = await fetch('/api/invoices/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DELETE',
+          invoiceId: invoice.id,
+          paymentId: deletingPaymentId,
+        }),
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        if (data.invoice) setInvoice(data.invoice)
+        if (data.payments) setPayments(data.payments)
+        setDeletingPaymentId(null)
+      } else {
+        setDeletePaymentError(data.error || 'Failed to delete payment')
+      }
+    } catch (err: any) {
+      console.error('Delete payment error:', err)
+      setDeletePaymentError('Error deleting payment')
+    }
+    setDeletePaymentLoading(false)
+  }
+
+  function openDeleteInvoiceModal() {
+    setDeleteInvoiceError('')
+    setShowDeleteInvoiceModal(true)
+  }
+
+  async function confirmDeleteInvoice() {
+    setDeleteInvoiceLoading(true)
+    setDeleteInvoiceError('')
+    try {
+      const res = await fetch('/api/invoices/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: invoice.id }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        router.push('/invoices')
+      } else {
+        setDeleteInvoiceError(data.error || 'Failed to delete invoice')
+        setDeleteInvoiceLoading(false)
+      }
+    } catch (err) {
+      setDeleteInvoiceError('Error deleting invoice')
+      setDeleteInvoiceLoading(false)
+    }
+  }
 
   // Automatically sync balance and status on load to correct any stale database records
   useState(() => {
@@ -175,8 +262,8 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
               Issued {format(new Date(invoice.issue_date), 'dd MMM yyyy')}
             </p>
           </div>
-          <span className={`badge ${STATUS_BADGE[invoice.status] ?? 'badge-default'}`}>
-            {invoice.status.replace('_', ' ')}
+          <span className={`badge ${isOverdue ? 'badge-danger' : (STATUS_BADGE[invoice.status] ?? 'badge-default')}`}>
+            {isOverdue ? 'OVERDUE' : invoice.status.replace('_', ' ')}
           </span>
         </div>
         <div className="flex gap-2 no-print flex-wrap">
@@ -207,6 +294,13 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
             <button className="btn btn-primary btn-sm" onClick={openPaymentForm}>
               <Plus size={14} />
               Record payment
+            </button>
+          )}
+
+          {profile.role === 'ADMIN' && (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteInvoiceModal} disabled={saving}>
+              <Trash2 size={14} />
+              Delete
             </button>
           )}
 
@@ -259,13 +353,13 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{invoice.client.phone}</div>
                 )}
                 {invoice.client?.address && (
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{invoice.client.address}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, whiteSpace: 'pre-line' }}>{invoice.client.address}</div>
                 )}
               </div>
             </div>
 
             {/* Line items */}
-            <div className="card" style={{ marginBottom: 12 }}>
+            <div className="card card-allow-break" style={{ marginBottom: 12 }}>
               <div className="card-header"><span className="text-section-header">Line items</span></div>
               <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
                 <table className="table table-compact">
@@ -338,7 +432,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                               <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => startEditPayment(p)}>
                                 <Edit2 size={12} />
                               </button>
-                              <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => deletePayment(p.id)} style={{ color: 'var(--danger)' }}>
+                              <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => openDeletePaymentModal(p.id)} style={{ color: 'var(--danger)' }}>
                                 <Trash2 size={12} />
                               </button>
                             </div>
@@ -436,6 +530,11 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                 </div>
                 <div className="card-body">
                   <form onSubmit={recordOrUpdatePayment} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {payError && (
+                      <div className="alert alert-danger" style={{ padding: '8px 12px', fontSize: 13 }}>
+                        {payError}
+                      </div>
+                    )}
                     <div className="form-group">
                       <label className="form-label form-label-required">Amount ({curr})</label>
                       <input
@@ -467,7 +566,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                       <input className="form-input" placeholder="Transaction reference or note" value={payRef} onChange={(e) => setPayRef(e.target.value)} />
                     </div>
                     <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowPaymentForm(false); setEditingPaymentId(null) }}>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowPaymentForm(false); setEditingPaymentId(null); setPayError('') }}>
                         Cancel
                       </button>
                       <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
@@ -482,6 +581,115 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
           </div>
         </div>
       </div>
+
+      {/* Delete Payment Modal Overlay */}
+      {deletingPaymentId && (
+        <div className="modal-backdrop" onClick={() => !deletePaymentLoading && setDeletingPaymentId(null)}>
+          <div className="modal-box" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ padding: 8, borderRadius: 8, background: '#fef2f2', color: 'var(--danger)' }}>
+                  <AlertTriangle size={20} />
+                </div>
+                <h3 className="modal-title">Delete Payment Record</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={() => setDeletingPaymentId(null)}
+                disabled={deletePaymentLoading}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 20px' }}>
+              {deletePaymentError && (
+                <div className="alert alert-danger" style={{ marginBottom: 12, padding: '8px 12px', fontSize: 13 }}>
+                  {deletePaymentError}
+                </div>
+              )}
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                Are you sure you want to delete this payment record? This action will adjust the invoice balance.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setDeletingPaymentId(null)}
+                disabled={deletePaymentLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={confirmDeletePayment}
+                disabled={deletePaymentLoading}
+              >
+                {deletePaymentLoading ? 'Deleting...' : 'Delete payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Invoice Modal Overlay */}
+      {showDeleteInvoiceModal && (
+        <div className="modal-backdrop" onClick={() => !deleteInvoiceLoading && setShowDeleteInvoiceModal(false)}>
+          <div className="modal-box" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ padding: 8, borderRadius: 8, background: '#fef2f2', color: 'var(--danger)' }}>
+                  <AlertTriangle size={20} />
+                </div>
+                <h3 className="modal-title">Delete Invoice</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={() => setShowDeleteInvoiceModal(false)}
+                disabled={deleteInvoiceLoading}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 20px' }}>
+              {deleteInvoiceError && (
+                <div className="alert alert-danger" style={{ marginBottom: 12, padding: '8px 12px', fontSize: 13 }}>
+                  {deleteInvoiceError}
+                </div>
+              )}
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                Are you sure you want to delete invoice <strong style={{ color: 'var(--text-primary)' }}>{invoice.invoice_number}</strong>?
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowDeleteInvoiceModal(false)}
+                disabled={deleteInvoiceLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={confirmDeleteInvoice}
+                disabled={deleteInvoiceLoading}
+              >
+                {deleteInvoiceLoading ? 'Deleting...' : 'Delete invoice'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

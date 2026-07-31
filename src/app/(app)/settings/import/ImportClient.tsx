@@ -20,6 +20,9 @@ interface ParsedRow {
   email?: string
   city?: string
   interest?: string
+  potential_value?: number | null
+  stage_id?: string
+  assigned_agent_id?: string
   status: 'valid' | 'error' | 'duplicate'
   error?: string
 }
@@ -37,6 +40,18 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
+  function updateRowStage(rowIndex: number, newStageId: string) {
+    setParsedRows((prev) =>
+      prev.map((r) => (r.rowIndex === rowIndex ? { ...r, stage_id: newStageId } : r))
+    )
+  }
+
+  function updateRowAgent(rowIndex: number, newAgentId: string) {
+    setParsedRows((prev) =>
+      prev.map((r) => (r.rowIndex === rowIndex ? { ...r, assigned_agent_id: newAgentId } : r))
+    )
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -51,9 +66,9 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const data: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
-    // Check for existing phones/emails
-    const phones = data.map((r) => String(r.phone || r.Phone || r.PHONE || '')).filter(Boolean)
-    const emails = data.map((r) => String(r.email || r.Email || r.EMAIL || '')).filter(Boolean)
+    // Check for existing phones/emails in database
+    const phones = data.map((r) => String(r.phone || r.Phone || r.PHONE || r.mobile || '').trim()).filter(Boolean)
+    const emails = data.map((r) => String(r.email || r.Email || r.EMAIL || '').trim()).filter(Boolean)
 
     const { data: existingByPhone } = await supabase
       .from('leads').select('phone').in('phone', phones)
@@ -63,20 +78,77 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
     const dupPhones = new Set(existingByPhone?.map((l: any) => l.phone) ?? [])
     const dupEmails = new Set(existingByEmail?.map((l: any) => l.email) ?? [])
 
+    const seenPhonesInFile = new Set<string>()
+    const seenEmailsInFile = new Set<string>()
+
     const rows: ParsedRow[] = data.map((row, i) => {
-      const name = String(row.name || row.Name || row.NAME || row.full_name || '')
-      const phone = String(row.phone || row.Phone || row.PHONE || row.mobile || '')
-      const email = String(row.email || row.Email || row.EMAIL || '')
-      const city = String(row.city || row.City || row.CITY || '')
-      const interest = String(row.interest || row.Interest || row.service || '')
+      const name = String(row.name || row.Name || row.NAME || row.full_name || '').trim()
+      const phone = String(row.phone || row.Phone || row.PHONE || row.mobile || '').trim()
+      const email = String(row.email || row.Email || row.EMAIL || '').trim()
+      const city = String(row.city || row.City || row.CITY || '').trim()
+      const interest = String(row.interest || row.Interest || row.service || '').trim()
+      const potentialRaw = row.potential_value || row['Potential Value'] || row.potentialValue || row.value || ''
+      const potential_value = potentialRaw ? parseFloat(String(potentialRaw)) : null
+
+      // Match Stage column from XLSX if available
+      const stageRaw = String(row.stage || row.Stage || row.STAGE || row.stage_id || row['Lead Stage'] || '').trim().toLowerCase()
+      const matchedStage = stageRaw
+        ? stages.find((s) => s.label.toLowerCase() === stageRaw || s.label.toLowerCase().includes(stageRaw) || s.id === stageRaw)
+        : undefined
+      const matchedStageId = matchedStage ? matchedStage.id : undefined
+
+      // Match Agent column from XLSX if available (by Email first, then Exact Name, then ID/Substring)
+      const agentRaw = String(row.agent || row.Agent || row.AGENT || row.assigned_agent || row['Assigned Agent'] || row['Agent Name'] || row.agent_name || '').trim().toLowerCase()
+      const matchedAgent = agentRaw
+        ? agents.find((a) => {
+            const agentName = a.name.toLowerCase()
+            const agentEmail = (a as any).email?.toLowerCase() || ''
+
+            // 1. If agentRaw is an email address (contains @), strictly match exact email
+            if (agentRaw.includes('@')) {
+              return agentEmail === agentRaw
+            }
+
+            // 2. Exact name or ID match
+            if (agentName === agentRaw || a.id === agentRaw) {
+              return true
+            }
+
+            // 3. Substring name match (only if not an email)
+            return agentName.includes(agentRaw) || agentRaw.includes(agentName)
+          })
+        : undefined
+      const matchedAgentId = matchedAgent ? matchedAgent.id : undefined
 
       if (!name && !phone && !email) {
-        return { rowIndex: i + 2, name, phone, email, city, interest, status: 'error' as const, error: 'No contact info' }
+        return { 
+          rowIndex: i + 2, name, phone, email, city, interest, potential_value, 
+          stage_id: matchedStageId, assigned_agent_id: matchedAgentId,
+          status: 'error' as const, error: 'No contact info' 
+        }
       }
-      if ((phone && dupPhones.has(phone)) || (email && dupEmails.has(email))) {
-        return { rowIndex: i + 2, name, phone, email, city, interest, status: 'duplicate' as const, error: 'Already exists' }
+
+      const isDbDuplicate = (phone && dupPhones.has(phone)) || (email && dupEmails.has(email))
+      const isFileDuplicate = (phone && seenPhonesInFile.has(phone)) || (email && seenEmailsInFile.has(email))
+
+      if (isDbDuplicate || isFileDuplicate) {
+        return {
+          rowIndex: i + 2,
+          name, phone, email, city, interest, potential_value,
+          stage_id: matchedStageId, assigned_agent_id: matchedAgentId,
+          status: 'duplicate' as const,
+          error: isDbDuplicate ? 'Already in CRM' : 'Duplicate row in file',
+        }
       }
-      return { rowIndex: i + 2, name, phone, email, city, interest, status: 'valid' as const }
+
+      if (phone) seenPhonesInFile.add(phone)
+      if (email) seenEmailsInFile.add(email)
+
+      return { 
+        rowIndex: i + 2, name, phone, email, city, interest, potential_value,
+        stage_id: matchedStageId, assigned_agent_id: matchedAgentId,
+        status: 'valid' as const 
+      }
     })
 
     setParsedRows(rows)
@@ -109,9 +181,10 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
         email: row.email || null,
         city: row.city || null,
         interest: row.interest || null,
+        potential_value: row.potential_value || null,
         form_data: {},
-        stage_id: stageId,
-        assigned_agent_id: agentId || null,
+        stage_id: row.stage_id || stageId,
+        assigned_agent_id: row.assigned_agent_id !== undefined ? (row.assigned_agent_id || null) : (agentId || null),
         import_batch_id: batch?.id,
       })
       if (error) errorCount++
@@ -124,9 +197,16 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
       error_count: errorCount,
     }).eq('id', batch?.id)
 
-    setImportResult({ successCount, errorCount, duplicateCount: parsedRows.filter((r) => r.status === 'duplicate').length })
+    setImportResult({
+      total: validRows.length,
+      success: successCount,
+      errors: errorCount,
+      duplicates: parsedRows.filter((r) => r.status === 'duplicate').length,
+    })
     setStep('done')
     setImporting(false)
+    const { data: updatedBatches } = await supabase.from('import_batches').select('*').order('created_at', { ascending: false }).limit(10)
+    if (updatedBatches) setBatches(updatedBatches)
   }
 
   const validCount = parsedRows.filter((r) => r.status === 'valid').length
@@ -143,7 +223,7 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
       </div>
 
       <div className="page-body">
-        <div style={{ maxWidth: 800, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Step: Upload */}
           {step === 'upload' && (
@@ -247,28 +327,57 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
                   </div>
 
                   {/* Preview table */}
-                  <div className="table-wrapper" style={{ maxHeight: 300, overflow: 'auto' }}>
+                  <div className="table-wrapper" style={{ maxHeight: '60vh', overflowY: 'auto', width: '100%' }}>
                     <table className="table">
                       <thead>
-                        <tr><th>Row</th><th>Name</th><th>Phone</th><th>Email</th><th>Status</th></tr>
+                        <tr>
+                          <th style={{ width: 60 }}>Row</th>
+                          <th>Name</th>
+                          <th>Phone</th>
+                          <th>Email</th>
+                          <th style={{ minWidth: 150 }}>Target Stage</th>
+                          <th style={{ minWidth: 170 }}>Assign Agent</th>
+                          <th style={{ width: 110 }}>Status</th>
+                        </tr>
                       </thead>
                       <tbody>
                         {parsedRows.slice(0, 50).map((row) => (
                           <tr key={row.rowIndex}>
                             <td style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{row.rowIndex}</td>
-                            <td>{row.name || '—'}</td>
+                            <td style={{ fontWeight: 500 }}>{row.name || '—'}</td>
                             <td style={{ fontSize: 13 }}>{row.phone || '—'}</td>
                             <td style={{ fontSize: 13 }}>{row.email || '—'}</td>
                             <td>
+                              <select
+                                className="form-input"
+                                style={{ padding: '4px 8px', height: 32, fontSize: 12, width: '100%' }}
+                                value={row.stage_id || stageId}
+                                onChange={(e) => updateRowStage(row.rowIndex, e.target.value)}
+                              >
+                                {stages.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              <select
+                                className="form-input"
+                                style={{ padding: '4px 8px', height: 32, fontSize: 12, width: '100%' }}
+                                value={row.assigned_agent_id !== undefined ? row.assigned_agent_id : agentId}
+                                onChange={(e) => updateRowAgent(row.rowIndex, e.target.value)}
+                              >
+                                <option value="">Unassigned</option>
+                                {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                              </select>
+                            </td>
+                            <td>
                               {row.status === 'valid' && <span className="badge badge-success">Valid</span>}
-                              {row.status === 'duplicate' && <span className="badge badge-warning" title={row.error}>Duplicate</span>}
+                              {row.status === 'duplicate' && <span className="badge badge-warning" title={row.error}>{row.error || 'Duplicate'}</span>}
                               {row.status === 'error' && <span className="badge badge-danger" title={row.error}>Error</span>}
                             </td>
                           </tr>
                         ))}
                         {parsedRows.length > 50 && (
                           <tr>
-                            <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12, padding: '8px 16px' }}>
+                            <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12, padding: '8px 16px' }}>
                               +{parsedRows.length - 50} more rows not shown
                             </td>
                           </tr>

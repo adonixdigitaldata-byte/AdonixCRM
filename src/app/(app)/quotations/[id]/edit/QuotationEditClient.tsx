@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, ArrowLeft, Save, Send } from 'lucide-react'
 import type { Quotation, Profile } from '@/types/database'
+import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
 
 interface LineItem {
   id: string
@@ -187,17 +188,11 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
                 {clients && clients.length > 0 && (
                   <div className="form-group">
                     <label className="form-label">Select Client</label>
-                    <select
-                      className="form-select"
-                      value={selectedClientId}
-                      onChange={(e) => handleClientSelect(e.target.value)}
-                    >
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.company ? `(${c.company})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <ClientSearchSelect
+                      clients={clients}
+                      selectedClientId={selectedClientId}
+                      onSelectClient={(client) => handleClientSelect(client.id)}
+                    />
                   </div>
                 )}
                 <div className="rg-2">
@@ -222,7 +217,7 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
                 </div>
                 <div className="form-group">
                   <label className="form-label">Billing Address</label>
-                  <input className="form-input" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} />
+                  <textarea className="form-input" rows={3} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} style={{ resize: 'vertical' }} />
                 </div>
               </div>
             </div>

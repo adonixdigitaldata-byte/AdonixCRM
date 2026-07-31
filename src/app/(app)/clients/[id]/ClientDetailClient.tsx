@@ -34,6 +34,8 @@ import {
   Mail,
   Phone,
   MapPin,
+  Copy,
+  Check,
 } from 'lucide-react'
 
 interface Props {
@@ -41,6 +43,7 @@ interface Props {
   profiles: { id: string; name: string }[]
   invoices: any[]
   quotations: any[]
+  currentProfile?: any
 }
 
 const MONTHS_LIST = [
@@ -65,7 +68,7 @@ function convertToSAR(amount: number, currency?: string): number {
   return amount * (rates[currency ?? 'SAR'] ?? 1.0)
 }
 
-export default function ClientDetailClient({ client, profiles, invoices, quotations }: Props) {
+export default function ClientDetailClient({ client, profiles, invoices, quotations, currentProfile }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -195,12 +198,30 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
   const [editRepYear, setEditRepYear] = useState('2026')
   const [editRepUrl, setEditRepUrl] = useState('')
 
-  // Search & Pagination States for Invoices & Quotations
+  // Search & Pagination States
   const [invoiceSearch, setInvoiceSearch] = useState('')
   const [invoicePage, setInvoicePage] = useState(1)
   const [quoteSearch, setQuoteSearch] = useState('')
   const [quotePage, setQuotePage] = useState(1)
+
+  const [credSearch, setCredSearch] = useState('')
+  const [credPage, setCredPage] = useState(1)
+
+  const [linkSearch, setLinkSearch] = useState('')
+  const [linkPage, setLinkPage] = useState(1)
+
+  const [noteSearch, setNoteSearch] = useState('')
+  const [notePage, setNotePage] = useState(1)
+
   const itemsPerPage = 5
+
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  function handleCopyText(text: string, id: string) {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 1500)
+  }
 
   // Financial calculations
   const totalInvoiced = invoices.reduce((sum, inv) => sum + convertToSAR(Number(inv.total), inv.currency), 0)
@@ -540,6 +561,30 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
   const totalQuotationsPages = Math.ceil(filteredQuotations.length / itemsPerPage) || 1
   const paginatedQuotations = filteredQuotations.slice((quotePage - 1) * itemsPerPage, quotePage * itemsPerPage)
 
+  // Filter & Paginate Credentials
+  const filteredCredentials = credentials.filter((c) => {
+    const query = credSearch.toLowerCase().trim()
+    return !query || (c.service ?? '').toLowerCase().includes(query) || (c.username ?? '').toLowerCase().includes(query) || (c.notes ?? '').toLowerCase().includes(query)
+  })
+  const totalCredPages = Math.ceil(filteredCredentials.length / itemsPerPage) || 1
+  const paginatedCredentials = filteredCredentials.slice((credPage - 1) * itemsPerPage, credPage * itemsPerPage)
+
+  // Filter & Paginate Deliverables (serviceLinks)
+  const filteredServiceLinks = serviceLinks.filter((l) => {
+    const query = linkSearch.toLowerCase().trim()
+    return !query || (l.label ?? '').toLowerCase().includes(query) || (l.url ?? '').toLowerCase().includes(query) || (l.notes ?? '').toLowerCase().includes(query)
+  })
+  const totalLinkPages = Math.ceil(filteredServiceLinks.length / itemsPerPage) || 1
+  const paginatedServiceLinks = filteredServiceLinks.slice((linkPage - 1) * itemsPerPage, linkPage * itemsPerPage)
+
+  // Filter & Paginate Notes
+  const filteredNotesList = notesList.filter((n) => {
+    const query = noteSearch.toLowerCase().trim()
+    return !query || (n.body ?? '').toLowerCase().includes(query)
+  })
+  const totalNotePages = Math.ceil(filteredNotesList.length / itemsPerPage) || 1
+  const paginatedNotesList = filteredNotesList.slice((notePage - 1) * itemsPerPage, notePage * itemsPerPage)
+
   return (
     <div>
       {/* 100% Custom bulletproof static header to prevent layout spacienss/stretching on all viewports */}
@@ -633,139 +678,190 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
             
             {/* Credentials Vault */}
             <div className="card">
-              <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Shield size={16} style={{ color: 'var(--text-secondary)' }} />
-                <span className="text-section-header">Credentials & Logins Vault</span>
+              <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div className="flex items-center gap-2">
+                  <Shield size={16} style={{ color: 'var(--text-secondary)' }} />
+                  <span className="text-section-header">Credentials & Logins Vault</span>
+                </div>
+                <div className="search-input-wrapper" style={{ position: 'relative', width: 220 }}>
+                  <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Search credentials..."
+                    value={credSearch}
+                    onChange={(e) => {
+                      setCredSearch(e.target.value)
+                      setCredPage(1)
+                    }}
+                    style={{ paddingLeft: 30, fontSize: 12, paddingTop: 4, paddingBottom: 4 }}
+                  />
+                </div>
               </div>
-              
+
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {credentials.length === 0 ? (
-                  <p className="text-meta" style={{ padding: '8px 0' }}>No credentials stored for this client.</p>
+                {filteredCredentials.length === 0 ? (
+                  <p className="text-meta" style={{ padding: '8px 0' }}>{credSearch ? 'No credentials match search' : 'No credentials stored for this client.'}</p>
                 ) : (
-                  <div className="table-wrapper">
-                    <table className="table table-compact">
-                      <thead>
-                        <tr>
-                          <th>Service</th>
-                          <th>Username</th>
-                          <th>Password</th>
-                          <th>Login URL</th>
-                          <th>Notes</th>
-                          <th style={{ width: 80 }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {credentials.map((cred) => {
-                          const isEditing = editingCredId === cred.id
-                          return (
-                            <tr key={cred.id}>
-                              {isEditing ? (
-                                <>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editCredService}
-                                      onChange={(e) => setEditCredService(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editCredUsername}
-                                      onChange={(e) => setEditCredUsername(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editCredPassword}
-                                      onChange={(e) => setEditCredPassword(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editCredUrl}
-                                      onChange={(e) => setEditCredUrl(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editCredNotes}
-                                      onChange={(e) => setEditCredNotes(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <div className="flex gap-1">
-                                      <button type="button" className="btn btn-primary btn-xs" onClick={saveEditedCred}>
-                                        Save
-                                      </button>
-                                      <button type="button" className="btn btn-outline btn-xs" onClick={() => setEditingCredId(null)}>
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </td>
-                                </>
-                              ) : (
-                                <>
-                                  <td style={{ fontWeight: 600 }}>{cred.service}</td>
-                                  <td>{cred.username ?? '—'}</td>
-                                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                    <div className="flex items-center gap-2">
-                                      <span>{visiblePasswords[cred.id] ? cred.password : '••••••••'}</span>
-                                      <button
-                                        type="button"
-                                        className="btn btn-ghost btn-icon btn-xs"
-                                        onClick={() => togglePassword(cred.id)}
-                                      >
-                                        {visiblePasswords[cred.id] ? <EyeOff size={12} /> : <Eye size={12} />}
-                                      </button>
-                                    </div>
-                                  </td>
-                                  <td>
-                                    {cred.url ? (
-                                      <a href={cred.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12 }}>
-                                        Visit link <ExternalLink size={10} />
-                                      </a>
-                                    ) : (
-                                      '—'
-                                    )}
-                                  </td>
-                                  <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{cred.notes ?? '—'}</td>
-                                  <td>
-                                    <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        className="btn btn-ghost btn-icon btn-xs"
-                                        onClick={() => startEditCred(cred)}
-                                        style={{ color: 'var(--text-secondary)' }}
-                                      >
-                                        <Edit2 size={13} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn btn-ghost btn-icon btn-xs"
-                                        onClick={() => deleteCredential(cred.id)}
-                                        style={{ color: 'var(--danger)' }}
-                                      >
-                                        <Trash2 size={13} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    <div className="table-wrapper">
+                      <table className="table table-compact">
+                        <thead>
+                          <tr>
+                            <th>Service</th>
+                            <th>Username</th>
+                            <th>Password</th>
+                            <th>Login URL</th>
+                            <th>Notes</th>
+                            <th style={{ width: 80 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedCredentials.map((cred) => {
+                            const isEditing = editingCredId === cred.id
+                            return (
+                              <tr key={cred.id}>
+                                {isEditing ? (
+                                  <>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editCredService}
+                                        onChange={(e) => setEditCredService(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editCredUsername}
+                                        onChange={(e) => setEditCredUsername(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editCredPassword}
+                                        onChange={(e) => setEditCredPassword(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editCredUrl}
+                                        onChange={(e) => setEditCredUrl(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editCredNotes}
+                                        onChange={(e) => setEditCredNotes(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <div className="flex gap-1">
+                                        <button type="button" className="btn btn-primary btn-xs" onClick={saveEditedCred}>
+                                          Save
+                                        </button>
+                                        <button type="button" className="btn btn-outline btn-xs" onClick={() => setEditingCredId(null)}>
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td style={{ fontWeight: 600, wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '120px' }}>{cred.service}</td>
+                                    <td style={{ wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '120px' }}>
+                                      <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+                                        <span>{cred.username ?? '—'}</span>
+                                        {cred.username && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-ghost btn-icon btn-xs"
+                                            onClick={() => handleCopyText(cred.username, `${cred.id}-username`)}
+                                            title="Copy Username"
+                                            style={{ color: copiedId === `${cred.id}-username` ? 'var(--success)' : 'var(--text-tertiary)' }}
+                                          >
+                                            {copiedId === `${cred.id}-username` ? <Check size={12} /> : <Copy size={12} />}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td style={{ fontVariantNumeric: 'tabular-nums', wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '120px' }}>
+                                      <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+                                        <span>{visiblePasswords[cred.id] ? cred.password : '••••••••'}</span>
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-icon btn-xs"
+                                          onClick={() => togglePassword(cred.id)}
+                                          title={visiblePasswords[cred.id] ? "Hide Password" : "Show Password"}
+                                        >
+                                          {visiblePasswords[cred.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+                                        </button>
+                                        {cred.password && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-ghost btn-icon btn-xs"
+                                            onClick={() => handleCopyText(cred.password, `${cred.id}-password`)}
+                                            title="Copy Password"
+                                            style={{ color: copiedId === `${cred.id}-password` ? 'var(--success)' : 'var(--text-tertiary)' }}
+                                          >
+                                            {copiedId === `${cred.id}-password` ? <Check size={12} /> : <Copy size={12} />}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td>
+                                      {cred.url ? (
+                                        <a href={cred.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12 }}>
+                                          Visit link <ExternalLink size={10} />
+                                        </a>
+                                      ) : (
+                                        '—'
+                                      )}
+                                    </td>
+                                    <td style={{ color: 'var(--text-secondary)', fontSize: 12, wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '150px' }}>{cred.notes ?? '—'}</td>
+                                    <td>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-icon btn-xs"
+                                          onClick={() => startEditCred(cred)}
+                                          style={{ color: 'var(--text-secondary)' }}
+                                        >
+                                          <Edit2 size={13} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-icon btn-xs"
+                                          onClick={() => deleteCredential(cred.id)}
+                                          style={{ color: 'var(--danger)' }}
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <ClientPagination
+                      currentPage={credPage}
+                      totalItems={filteredCredentials.length}
+                      pageSize={itemsPerPage}
+                      onPageChange={setCredPage}
+                    />
+                  </>
                 )}
 
                 {/* Form to Add Credential (conditional toggle CTA if list is filled) */}
@@ -837,103 +933,128 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
 
             {/* Custom Deliverables & Reports Links */}
             <div className="card">
-              <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Layers size={16} style={{ color: 'var(--text-secondary)' }} />
-                <span className="text-section-header">Custom Reports & Deliverables Links</span>
+              <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div className="flex items-center gap-2">
+                  <Layers size={16} style={{ color: 'var(--text-secondary)' }} />
+                  <span className="text-section-header">Custom Reports & Deliverables Links</span>
+                </div>
+                <div className="search-input-wrapper" style={{ position: 'relative', width: 220 }}>
+                  <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Search deliverables..."
+                    value={linkSearch}
+                    onChange={(e) => {
+                      setLinkSearch(e.target.value)
+                      setLinkPage(1)
+                    }}
+                    style={{ paddingLeft: 30, fontSize: 12, paddingTop: 4, paddingBottom: 4 }}
+                  />
+                </div>
               </div>
+
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {serviceLinks.length === 0 ? (
-                  <p className="text-meta" style={{ padding: '8px 0' }}>No custom deliverables recorded.</p>
+                {filteredServiceLinks.length === 0 ? (
+                  <p className="text-meta" style={{ padding: '8px 0' }}>{linkSearch ? 'No deliverables match search' : 'No custom deliverables recorded.'}</p>
                 ) : (
-                  <div className="table-wrapper">
-                    <table className="table table-compact">
-                      <thead>
-                        <tr>
-                          <th>Label</th>
-                          <th>URL</th>
-                          <th>Notes</th>
-                          <th style={{ width: 80 }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {serviceLinks.map((link) => {
-                          const isEditing = editingLinkId === link.id
-                          return (
-                            <tr key={link.id}>
-                              {isEditing ? (
-                                <>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editLinkLabel}
-                                      onChange={(e) => setEditLinkLabel(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editLinkUrl}
-                                      onChange={(e) => setEditLinkUrl(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="form-input"
-                                      value={editLinkNotes}
-                                      onChange={(e) => setEditLinkNotes(e.target.value)}
-                                      style={{ fontSize: 12, padding: '4px 8px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <div className="flex gap-1">
-                                      <button type="button" className="btn btn-primary btn-xs" onClick={saveEditedLink}>
-                                        Save
-                                      </button>
-                                      <button type="button" className="btn btn-outline btn-xs" onClick={() => setEditingLinkId(null)}>
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </td>
-                                </>
-                              ) : (
-                                <>
-                                  <td style={{ fontWeight: 600 }}>{link.label}</td>
-                                  <td>
-                                    <a href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12 }}>
-                                      Open link <ExternalLink size={10} />
-                                    </a>
-                                  </td>
-                                  <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{link.notes ?? '—'}</td>
-                                  <td>
-                                    <div className="flex gap-2">
-                                      <button
-                                        type="button"
-                                        className="btn btn-ghost btn-icon btn-xs"
-                                        onClick={() => startEditLink(link)}
-                                        style={{ color: 'var(--text-secondary)' }}
-                                      >
-                                        <Edit2 size={13} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn btn-ghost btn-icon btn-xs"
-                                        onClick={() => deleteServiceLink(link.id)}
-                                        style={{ color: 'var(--danger)' }}
-                                      >
-                                        <Trash2 size={13} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    <div className="table-wrapper">
+                      <table className="table table-compact">
+                        <thead>
+                          <tr>
+                            <th>Label</th>
+                            <th>URL</th>
+                            <th>Notes</th>
+                            <th style={{ width: 80 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedServiceLinks.map((link) => {
+                            const isEditing = editingLinkId === link.id
+                            return (
+                              <tr key={link.id}>
+                                {isEditing ? (
+                                  <>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editLinkLabel}
+                                        onChange={(e) => setEditLinkLabel(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editLinkUrl}
+                                        onChange={(e) => setEditLinkUrl(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <input
+                                        className="form-input"
+                                        value={editLinkNotes}
+                                        onChange={(e) => setEditLinkNotes(e.target.value)}
+                                        style={{ fontSize: 12, padding: '4px 8px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <div className="flex gap-1">
+                                        <button type="button" className="btn btn-primary btn-xs" onClick={saveEditedLink}>
+                                          Save
+                                        </button>
+                                        <button type="button" className="btn btn-outline btn-xs" onClick={() => setEditingLinkId(null)}>
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td style={{ fontWeight: 600 }}>{link.label}</td>
+                                    <td>
+                                      <a href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12 }}>
+                                        Open link <ExternalLink size={10} />
+                                      </a>
+                                    </td>
+                                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{link.notes ?? '—'}</td>
+                                    <td>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-icon btn-xs"
+                                          onClick={() => startEditLink(link)}
+                                          style={{ color: 'var(--text-secondary)' }}
+                                        >
+                                          <Edit2 size={13} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-icon btn-xs"
+                                          onClick={() => deleteServiceLink(link.id)}
+                                          style={{ color: 'var(--danger)' }}
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <ClientPagination
+                      currentPage={linkPage}
+                      totalItems={filteredServiceLinks.length}
+                      pageSize={itemsPerPage}
+                      onPageChange={setLinkPage}
+                    />
+                  </>
                 )}
 
                 {/* Form to Add Custom Link (conditional toggle CTA if list is filled) */}
@@ -988,9 +1109,25 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
 
             {/* General Client Notes (Timeline Interface) */}
             <div className="card">
-              <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
-                <span className="text-section-header">Client Reference Notes Timeline</span>
+              <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div className="flex items-center gap-2">
+                  <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
+                  <span className="text-section-header">Client Reference Notes Timeline</span>
+                </div>
+                <div className="search-input-wrapper" style={{ position: 'relative', width: 220 }}>
+                  <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Search notes..."
+                    value={noteSearch}
+                    onChange={(e) => {
+                      setNoteSearch(e.target.value)
+                      setNotePage(1)
+                    }}
+                    style={{ paddingLeft: 30, fontSize: 12, paddingTop: 4, paddingBottom: 4 }}
+                  />
+                </div>
               </div>
               
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1013,79 +1150,87 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
 
                 {/* Timeline display */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                  {notesList.length === 0 ? (
-                    <p className="text-meta" style={{ textAlign: 'center', padding: '12px 0' }}>No reference notes recorded. Add one above.</p>
+                  {filteredNotesList.length === 0 ? (
+                    <p className="text-meta" style={{ textAlign: 'center', padding: '12px 0' }}>{noteSearch ? 'No notes match search' : 'No reference notes recorded. Add one above.'}</p>
                   ) : (
-                    notesList.map((note) => {
-                      const isEditing = editingNoteId === note.id
-                      return (
-                        <div
-                          key={note.id}
-                          style={{
-                            padding: 12,
-                            background: 'var(--bg)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 'var(--radius-sm)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                          }}
-                        >
-                          <div className="flex justify-between items-center" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                            <div className="flex items-center gap-2">
-                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Agent Reference</span>
-                              <span>•</span>
-                              <span>{format(new Date(note.created_at), 'dd MMM yyyy HH:mm')}</span>
-                            </div>
-                            
-                            {!isEditing && (
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost btn-icon btn-xs"
-                                  onClick={() => startEditNote(note)}
-                                  style={{ padding: 2 }}
-                                >
-                                  <Edit2 size={12} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost btn-icon btn-xs"
-                                  onClick={() => deleteNote(note.id)}
-                                  style={{ color: 'var(--danger)', padding: 2 }}
-                                >
-                                  <Trash2 size={12} />
-                                </button>
+                    <>
+                      {paginatedNotesList.map((note) => {
+                        const isEditing = editingNoteId === note.id
+                        return (
+                          <div
+                            key={note.id}
+                            style={{
+                              padding: 12,
+                              background: 'var(--bg)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 'var(--radius-sm)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 8,
+                            }}
+                          >
+                            <div className="flex justify-between items-center" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                              <div className="flex items-center gap-2">
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Agent Reference</span>
+                                <span>•</span>
+                                <span>{format(new Date(note.created_at), 'dd MMM yyyy HH:mm')}</span>
                               </div>
+                              
+                              {!isEditing && (
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-icon btn-xs"
+                                    onClick={() => startEditNote(note)}
+                                    style={{ padding: 2 }}
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-icon btn-xs"
+                                    onClick={() => deleteNote(note.id)}
+                                    style={{ color: 'var(--danger)', padding: 2 }}
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {isEditing ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <textarea
+                                  className="form-input"
+                                  rows={2}
+                                  value={editingNoteBody}
+                                  onChange={(e) => setEditingNoteBody(e.target.value)}
+                                  style={{ fontSize: 13 }}
+                                />
+                                <div className="flex gap-2 justify-end">
+                                  <button type="button" className="btn btn-primary btn-xs" onClick={saveEditedNote}>
+                                    Save Note
+                                  </button>
+                                  <button type="button" className="btn btn-outline btn-xs" onClick={() => setEditingNoteId(null)}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: 13, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word', color: 'var(--text-primary)', margin: 0 }}>
+                                {note.body}
+                              </p>
                             )}
                           </div>
-
-                          {isEditing ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <textarea
-                                className="form-input"
-                                rows={2}
-                                value={editingNoteBody}
-                                onChange={(e) => setEditingNoteBody(e.target.value)}
-                                style={{ fontSize: 13 }}
-                              />
-                              <div className="flex gap-2 justify-end">
-                                <button type="button" className="btn btn-primary btn-xs" onClick={saveEditedNote}>
-                                  Save Note
-                                </button>
-                                <button type="button" className="btn btn-outline btn-xs" onClick={() => setEditingNoteId(null)}>
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <p style={{ fontSize: 13, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word', color: 'var(--text-primary)', margin: 0 }}>
-                              {note.body}
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })
+                        )
+                      })}
+                      <ClientPagination
+                        currentPage={notePage}
+                        totalItems={filteredNotesList.length}
+                        pageSize={itemsPerPage}
+                        onPageChange={setNotePage}
+                      />
+                    </>
                   )}
                 </div>
               </div>
@@ -1522,7 +1667,16 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
 
                 <div className="form-group">
                   <label className="form-label">Account Manager</label>
-                  <select className="form-select" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+                  <select
+                    className="form-select"
+                    value={agentId}
+                    onChange={(e) => setAgentId(e.target.value)}
+                    disabled={currentProfile?.role !== 'ADMIN'}
+                    style={{
+                      background: currentProfile?.role !== 'ADMIN' ? 'var(--bg-secondary)' : undefined,
+                      cursor: currentProfile?.role !== 'ADMIN' ? 'not-allowed' : undefined,
+                    }}
+                  >
                     <option value="">Unassigned</option>
                     {profiles.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -1936,6 +2090,56 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
             {saving ? 'Saving changes...' : 'Save changes'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ClientPagination({
+  currentPage,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: {
+  currentPage: number
+  totalItems: number
+  pageSize: number
+  onPageChange: (p: number) => void
+}) {
+  const totalPages = Math.ceil(totalItems / pageSize)
+  if (totalPages <= 1) return null
+
+  return (
+    <div className="flex justify-between items-center" style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
+      <span className="text-meta">
+        Showing {Math.min((currentPage - 1) * pageSize + 1, totalItems)} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
+      </span>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className="btn btn-outline btn-xs"
+          disabled={currentPage === 1}
+          onClick={() => {
+            onPageChange(currentPage - 1)
+            setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
+          }}
+        >
+          Prev
+        </button>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          type="button"
+          className="btn btn-outline btn-xs"
+          disabled={currentPage === totalPages}
+          onClick={() => {
+            onPageChange(currentPage + 1)
+            setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
+          }}
+        >
+          Next
+        </button>
       </div>
     </div>
   )

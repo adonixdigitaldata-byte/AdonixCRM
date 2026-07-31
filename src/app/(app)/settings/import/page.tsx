@@ -16,14 +16,21 @@ export default async function ImportPage() {
     { data: batches },
   ] = await Promise.all([
     supabase.from('lead_stages').select('*').order('sort_order'),
-    supabase.from('profiles').select('id, name').eq('is_active', true).eq('role', 'AGENT').order('name'),
+    supabase.from('profiles').select('id, name, email, role').order('name'),
     supabase.from('import_batches').select('*').order('created_at', { ascending: false }).limit(10),
   ])
+
+  const formattedAgents = (agents ?? []).map((a) => ({
+    id: a.id,
+    name: a.name || a.email || 'Unnamed User',
+    email: a.email || '',
+    role: a.role,
+  }))
 
   return (
     <ImportClient
       stages={stages ?? []}
-      agents={agents ?? []}
+      agents={formattedAgents}
       batches={batches ?? []}
       currentUserId={user.id}
     />

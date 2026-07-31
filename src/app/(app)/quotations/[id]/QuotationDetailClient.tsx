@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
-import { ArrowLeft, FileText, Send, CheckCircle, Printer, Edit2 } from 'lucide-react'
+import { ArrowLeft, FileText, Send, CheckCircle, Printer, Edit2, Trash2, AlertTriangle, X } from 'lucide-react'
 import type { Quotation, Profile, QuotationStatus } from '@/types/database'
 import Link from 'next/link'
 
@@ -32,7 +32,29 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
   const [quotation, setQuotation] = useState(initial)
   const [updating, setUpdating] = useState(false)
 
+  // Delete Quotation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
   const curr = quotation.currency ?? 'SAR'
+
+  const isExpired = (() => {
+    if (quotation.status === 'ACCEPTED' || quotation.status === 'REJECTED') {
+      return false
+    }
+    if (quotation.status === 'EXPIRED') return true
+    if (quotation.valid_until) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const validUntil = new Date(quotation.valid_until)
+      validUntil.setHours(0, 0, 0, 0)
+      return today > validUntil
+    }
+    return false
+  })()
+
+  const displayStatus = isExpired ? 'EXPIRED' : quotation.status
 
   function handlePrint() {
     window.print()
@@ -43,6 +65,33 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
     await supabase.from('quotations').update({ status: newStatus }).eq('id', quotation.id)
     setQuotation({ ...quotation, status: newStatus })
     setUpdating(false)
+  }
+
+  function openDeleteModal() {
+    setDeleteError('')
+    setShowDeleteModal(true)
+  }
+
+  async function confirmDeleteQuotation() {
+    setDeleteLoading(true)
+    setDeleteError('')
+    try {
+      const res = await fetch('/api/quotations/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quotationId: quotation.id }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        router.push('/quotations')
+      } else {
+        setDeleteError(data.error || 'Failed to delete quotation')
+        setDeleteLoading(false)
+      }
+    } catch (err) {
+      setDeleteError('Error deleting quotation')
+      setDeleteLoading(false)
+    }
   }
 
   async function convertToInvoice() {
@@ -95,8 +144,8 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
               Issued {format(new Date(quotation.issue_date), 'dd MMM yyyy')}
             </p>
           </div>
-          <span className={`badge ${STATUS_BADGE[quotation.status] ?? 'badge-default'}`}>
-            {quotation.status}
+          <span className={`badge ${STATUS_BADGE[displayStatus] ?? 'badge-default'}`}>
+            {displayStatus}
           </span>
         </div>
         <div className="flex gap-2 no-print">
@@ -112,6 +161,12 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             <button className="btn btn-primary btn-sm" onClick={convertToInvoice} disabled={updating}>
               <FileText size={14} />
               Convert to invoice
+            </button>
+          )}
+          {profile.role === 'ADMIN' && (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteModal} disabled={updating}>
+              <Trash2 size={14} />
+              Delete
             </button>
           )}
           {nextStatuses.map((status) => (
@@ -165,12 +220,12 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{quotation.client.phone}</div>
                 )}
                 {quotation.client?.address && (
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{quotation.client.address}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, whiteSpace: 'pre-line' }}>{quotation.client.address}</div>
                 )}
               </div>
             </div>
 
-            <div className="card" style={{ marginBottom: 12 }}>
+            <div className="card card-allow-break" style={{ marginBottom: 12 }}>
               <div className="card-header">
                 <span className="text-section-header">Line items</span>
               </div>
@@ -301,6 +356,60 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
           )}
         </div>
       </div>
+
+      {showDeleteModal && (
+        <div className="modal-backdrop" onClick={() => !deleteLoading && setShowDeleteModal(false)}>
+          <div className="modal-box" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ padding: 8, borderRadius: 8, background: '#fef2f2', color: 'var(--danger)' }}>
+                  <AlertTriangle size={20} />
+                </div>
+                <h3 className="modal-title">Delete Quotation</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleteLoading}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 20px' }}>
+              {deleteError && (
+                <div className="alert alert-danger" style={{ marginBottom: 12, padding: '8px 12px', fontSize: 13 }}>
+                  {deleteError}
+                </div>
+              )}
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                Are you sure you want to delete quotation <strong style={{ color: 'var(--text-primary)' }}>{quotation.quote_number}</strong>?
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={confirmDeleteQuotation}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete quotation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

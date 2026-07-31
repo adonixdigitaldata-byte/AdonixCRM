@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, ArrowLeft, Save, Send } from 'lucide-react'
 import type { Profile } from '@/types/database'
+import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
 
 interface LineItem {
   id: string
@@ -223,11 +224,11 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
                 {useExistingClient && existingClients.length > 0 ? (
                   <div className="form-group">
                     <label className="form-label">Client</label>
-                    <select className="form-select" value={selectedClientId} onChange={(e) => handleClientSelect(e.target.value)}>
-                      {existingClients.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name} {c.company ? `(${c.company})` : ''}</option>
-                      ))}
-                    </select>
+                    <ClientSearchSelect
+                      clients={existingClients}
+                      selectedClientId={selectedClientId}
+                      onSelectClient={(client) => handleClientSelect(client.id)}
+                    />
                   </div>
                 ) : (
                   <>
@@ -253,7 +254,7 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
                     </div>
                     <div className="form-group">
                       <label className="form-label">Billing Address</label>
-                      <input className="form-input" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} />
+                      <textarea className="form-input" rows={3} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} style={{ resize: 'vertical' }} />
                     </div>
                   </>
                 )}

@@ -239,10 +239,7 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
             >
               <option value="ALL">All Retainers</option>
               <option value="MONTHLY">Monthly</option>
-              <option value="QUARTERLY">Quarterly</option>
-              <option value="YEARLY">Yearly</option>
               <option value="ONE_TIME">One-Time</option>
-              <option value="NONE">None</option>
             </select>
           </div>
         </div>
@@ -341,14 +338,20 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
                   <button
                     className="btn btn-outline btn-xs"
                     disabled={page === 1}
-                    onClick={() => setPage((p) => p - 1)}
+                    onClick={() => {
+                      setPage((p) => p - 1)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
                   >
                     Previous
                   </button>
                   <button
                     className="btn btn-outline btn-xs"
                     disabled={page === totalPages}
-                    onClick={() => setPage((p) => p + 1)}
+                    onClick={() => {
+                      setPage((p) => p + 1)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
                   >
                     Next
                   </button>

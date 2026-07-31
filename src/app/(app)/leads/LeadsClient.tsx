@@ -299,6 +299,8 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
             leads={leads}
             loading={loading}
             onRefresh={fetchLeads}
+            agents={agents}
+            isAdmin={profile.role === 'ADMIN'}
           />
         </div>
       )}
@@ -309,6 +311,7 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
           stages={stages}
           agents={agents}
           currentUserId={profile.id}
+          userRole={profile.role}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             setShowAddModal(false)

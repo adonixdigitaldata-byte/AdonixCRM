@@ -47,12 +47,20 @@ export default async function ClientDetailPage({ params }: PageProps) {
     .eq('client_id', id)
     .order('created_at', { ascending: false })
 
+  // Fetch current user's profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
   return (
     <ClientDetailClient
       client={client}
       profiles={profiles ?? []}
       invoices={invoices ?? []}
       quotations={quotations ?? []}
+      currentProfile={profile}
     />
   )
 }

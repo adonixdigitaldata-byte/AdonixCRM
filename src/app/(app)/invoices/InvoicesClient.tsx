@@ -30,6 +30,22 @@ export default function InvoicesClient({ invoices }: Props) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
+  // Helper to determine if an invoice is overdue
+  function getIsOverdue(inv: any) {
+    if (inv.status === 'PAID' || inv.status === 'CANCELLED' || inv.status === 'DRAFT') {
+      return false
+    }
+    if (inv.status === 'OVERDUE') return true
+    if (inv.due_date) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const dueDate = new Date(inv.due_date)
+      dueDate.setHours(0, 0, 0, 0)
+      return today > dueDate
+    }
+    return false
+  }
+
   // Filtering
   const filtered = invoices.filter((inv) => {
     const invNum = (inv.invoice_number ?? '').toLowerCase()
@@ -38,15 +54,22 @@ export default function InvoicesClient({ invoices }: Props) {
     const query = search.toLowerCase().trim()
 
     const matchesSearch = !query || invNum.includes(query) || cName.includes(query) || cComp.includes(query)
-    const matchesStatus = statusFilter === 'ALL' || inv.status === statusFilter
+    const isOverdue = getIsOverdue(inv)
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      (statusFilter === 'OVERDUE' && isOverdue) ||
+      (statusFilter !== 'OVERDUE' && inv.status === statusFilter)
 
     return matchesSearch && matchesStatus
   })
 
-  const totalInvoiced = filtered.reduce((acc, inv) => acc + convertToSAR(Number(inv.total), inv.currency), 0)
-  const totalCollected = filtered.reduce((acc, inv) => acc + convertToSAR(Number(inv.amount_paid), inv.currency), 0)
+  // Exclude CANCELLED invoices from total invoiced and outstanding calculations
+  const activeInvoices = filtered.filter((inv) => inv.status !== 'CANCELLED')
+
+  const totalInvoiced = activeInvoices.reduce((acc, inv) => acc + convertToSAR(Number(inv.total), inv.currency), 0)
+  const totalCollected = activeInvoices.reduce((acc, inv) => acc + convertToSAR(Number(inv.amount_paid), inv.currency), 0)
   const totalOutstanding = totalInvoiced - totalCollected
-  const overdueCount = filtered.filter((inv) => inv.status === 'OVERDUE').length
+  const overdueCount = activeInvoices.filter(getIsOverdue).length
 
   return (
     <div>
@@ -160,8 +183,8 @@ export default function InvoicesClient({ invoices }: Props) {
               <tbody>
                 {filtered.map((inv: any) => {
                   const curr = inv.currency ?? 'SAR'
-                  const balance = Number(inv.total) - Number(inv.amount_paid)
-                  const isOverdue = inv.status === 'OVERDUE'
+                  const balance = inv.status === 'CANCELLED' ? 0 : Number(inv.total) - Number(inv.amount_paid)
+                  const isOverdue = getIsOverdue(inv)
                   return (
                     <tr
                       key={inv.id}
@@ -187,8 +210,8 @@ export default function InvoicesClient({ invoices }: Props) {
                         </Link>
                       </td>
                       <td>
-                        <span className={`badge ${STATUS_BADGE[inv.status] ?? 'badge-default'}`}>
-                          {inv.status.replace('_', ' ')}
+                        <span className={`badge ${isOverdue ? 'badge-danger' : (STATUS_BADGE[inv.status] ?? 'badge-default')}`}>
+                          {isOverdue ? 'OVERDUE' : inv.status.replace('_', ' ')}
                         </span>
                       </td>
                       <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>

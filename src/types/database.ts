@@ -18,6 +18,8 @@ export type ActivityType =
   | 'NOTE_DELETED'
   | 'FOLLOWUP_SCHEDULED'
   | 'FOLLOWUP_COMPLETED'
+  | 'FOLLOWUP_UPDATED'
+  | 'FOLLOWUP_DELETED'
   | 'QUOTE_SENT'
   | 'INVOICE_SENT'
   | 'ASSIGNED'
@@ -88,6 +90,7 @@ export interface Lead {
   email: string | null
   city: string | null
   interest: string | null
+  potential_value?: number | null
   form_data: Record<string, string>
   raw_payload: Json | null
   stage_id: string
@@ -121,6 +124,7 @@ export interface LeadFollowup {
   agent_id: string
   scheduled_at: string
   note: string | null
+  outcome_note: string | null
   is_completed: boolean
   completed_at: string | null
   created_at: string

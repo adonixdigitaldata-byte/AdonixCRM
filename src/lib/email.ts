@@ -58,6 +58,25 @@ export async function sendFollowupReminderEmail({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://crm.adonixdigital.com'
   const leadUrl = `${appUrl}/leads/${leadId}`
 
+  // Format dual timezone (Saudi Arabia KSA & India IST)
+  let ksaTime = scheduledAt
+  let istTime = scheduledAt
+  try {
+    const d = new Date(scheduledAt)
+    if (!isNaN(d.getTime())) {
+      const opts: Intl.DateTimeFormatOptions = {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }
+      ksaTime = new Intl.DateTimeFormat('en-US', { ...opts, timeZone: 'Asia/Riyadh' }).format(d)
+      istTime = new Intl.DateTimeFormat('en-US', { ...opts, timeZone: 'Asia/Kolkata' }).format(d)
+    }
+  } catch {}
+
   try {
     await resend.emails.send({
       from: fromEmail,
@@ -72,8 +91,16 @@ export async function sendFollowupReminderEmail({
           <div style="background-color: #f4f4f5; padding: 14px 16px; border-radius: 6px; margin: 16px 0;">
             <div style="font-size: 15px; font-weight: 600; color: #18181b;">${leadName}</div>
             ${leadPhone ? `<div style="font-size: 13px; color: #71717a; margin-top: 4px;">Phone: ${leadPhone}</div>` : ''}
-            <div style="font-size: 13px; color: #71717a; margin-top: 4px;">Scheduled time: ${scheduledAt}</div>
-            ${followupNote ? `<div style="font-size: 13px; color: #3f3f46; margin-top: 8px; font-style: italic;">Note: "${followupNote}"</div>` : ''}
+            
+            <div style="margin-top: 8px; font-size: 13px; color: #3f3f46;">
+              <div style="font-weight: 600; color: #18181b; margin-bottom: 4px;">Scheduled Time:</div>
+              <div style="padding-left: 8px; border-left: 3px solid #2563eb;">
+                <div style="color: #27272a; margin-bottom: 2px;">🇸🇦 <strong>Saudi Arabia (KSA):</strong> ${ksaTime}</div>
+                <div style="color: #27272a;">🇮🇳 <strong>India (IST):</strong> ${istTime}</div>
+              </div>
+            </div>
+
+            ${followupNote ? `<div style="font-size: 13px; color: #3f3f46; margin-top: 10px; font-style: italic;">Note: "${followupNote}"</div>` : ''}
           </div>
 
           <div style="margin-top: 20px;">

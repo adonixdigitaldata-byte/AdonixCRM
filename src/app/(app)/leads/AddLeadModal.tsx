@@ -9,6 +9,7 @@ interface Props {
   stages: LeadStage[]
   agents: { id: string; name: string }[]
   currentUserId: string
+  userRole?: string
   onClose: () => void
   onSuccess: () => void
 }
@@ -20,7 +21,7 @@ const SOURCES = [
   { value: 'SNAPCHAT', label: 'Snapchat' },
 ]
 
-export default function AddLeadModal({ stages, agents, currentUserId, onClose, onSuccess }: Props) {
+export default function AddLeadModal({ stages, agents, currentUserId, userRole, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -30,9 +31,10 @@ export default function AddLeadModal({ stages, agents, currentUserId, onClose, o
     email: '',
     city: '',
     interest: '',
+    potential_value: '',
     source: 'MANUAL',
     stage_id: stages[0]?.id ?? '',
-    assigned_agent_id: '',
+    assigned_agent_id: userRole === 'AGENT' ? currentUserId : '',
     notes: '',
   })
 
@@ -53,45 +55,29 @@ export default function AddLeadModal({ stages, agents, currentUserId, onClose, o
 
     setLoading(true)
 
-    const payload: any = {
-      name: form.name.trim(),
-      phone: form.phone.trim() || null,
-      email: form.email.trim() || null,
-      city: form.city.trim() || null,
-      interest: form.interest.trim() || null,
-      source: form.source,
-      stage_id: form.stage_id,
-      assigned_agent_id: form.assigned_agent_id || null,
-      form_data: {},
-    }
-
-    const { data: lead, error } = await supabase
-      .from('leads')
-      .insert(payload)
-      .select()
-      .single()
-
-    if (error) {
-      setErrors({ general: 'Failed to create lead. Please try again.' })
-      setLoading(false)
-      return
-    }
-
-    // Log activity
-    await supabase.from('lead_activities').insert({
-      lead_id: lead.id,
-      activity_type: 'LEAD_CREATED',
-      performed_by: currentUserId,
-      metadata: { source: form.source },
+    const res = await fetch('/api/leads/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: form.name.trim(),
+        phone: form.phone.trim() || null,
+        email: form.email.trim() || null,
+        city: form.city.trim() || null,
+        interest: form.interest.trim() || null,
+        potential_value: form.potential_value ? parseFloat(form.potential_value) : null,
+        source: form.source,
+        stage_id: form.stage_id,
+        assigned_agent_id: form.assigned_agent_id || null,
+        notes: form.notes.trim() || null,
+      }),
     })
 
-    // Add note if provided
-    if (form.notes.trim()) {
-      await supabase.from('lead_notes').insert({
-        lead_id: lead.id,
-        author_id: currentUserId,
-        body: form.notes.trim(),
-      })
+    const data = await res.json()
+
+    if (!res.ok) {
+      setErrors({ general: data.error ?? 'Failed to create lead. Please try again.' })
+      setLoading(false)
+      return
     }
 
     onSuccess()
@@ -175,6 +161,18 @@ export default function AddLeadModal({ stages, agents, currentUserId, onClose, o
                   onChange={(e) => setForm({ ...form, interest: e.target.value })}
                 />
               </div>
+              <div className="form-group">
+                <label className="form-label">Potential Earning (SAR)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  className="form-input"
+                  placeholder="e.g. 5000"
+                  value={form.potential_value}
+                  onChange={(e) => setForm({ ...form, potential_value: e.target.value })}
+                />
+              </div>
             </div>
 
             {/* Source + Stage */}
@@ -208,16 +206,26 @@ export default function AddLeadModal({ stages, agents, currentUserId, onClose, o
             {/* Assign agent */}
             <div className="form-group">
               <label className="form-label">Assign to agent</label>
-              <select
-                className="form-input"
-                value={form.assigned_agent_id}
-                onChange={(e) => setForm({ ...form, assigned_agent_id: e.target.value })}
-              >
-                <option value="">Unassigned</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
+              {userRole === 'AGENT' ? (
+                <input
+                  type="text"
+                  className="form-input"
+                  value={agents.find((a) => a.id === currentUserId)?.name ?? 'Me'}
+                  disabled
+                  style={{ background: 'var(--bg)', cursor: 'not-allowed' }}
+                />
+              ) : (
+                <select
+                  className="form-input"
+                  value={form.assigned_agent_id}
+                  onChange={(e) => setForm({ ...form, assigned_agent_id: e.target.value })}
+                >
+                  <option value="">Unassigned</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Initial note */}
