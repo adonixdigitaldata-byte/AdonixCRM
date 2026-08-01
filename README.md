@@ -25,7 +25,7 @@ A full-stack Meta Ads CRM + Quotation/Invoicing Platform.
 3. **Set up Meta webhook** (after deploying):
    - In Meta Developer Console > Webhooks
    - Callback URL: `https://your-domain.com/api/webhooks/meta`
-   - Verify token: `adonix_crm_webhook_2026`
+   - Verify token: ` `
    - Subscribe to: `leadgen`
 
 4. **Install dependencies:**
