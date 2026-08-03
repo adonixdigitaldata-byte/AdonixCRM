@@ -45,7 +45,17 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState('')
   const [taxPercent, setTaxPercent] = useState(5)
-  const [terms, setTerms] = useState('Payment due within 30 days of invoice date.')
+  const DEFAULT_TERMS = `50% Advance Payment – Due upon acceptance of the proposal and before project commencement.
+30% Milestone Payment – Due upon completion of the first review/demo and client approval to proceed.
+20% Final Payment – Due upon final delivery of the project and prior to deployment, handover, or transfer of source files.
+
+**Additional Terms**
+Project work will commence upon receipt of the initial 50% payment.
+Any additional features or changes outside the agreed scope will be quoted and billed separately as change requests.
+Delays in approvals or payments may impact the project timeline.
+All payments are non-refundable once the corresponding project phase has been completed.`
+
+  const [terms, setTerms] = useState(DEFAULT_TERMS)
   const [notes, setNotes] = useState('')
 
   // Line items
@@ -417,7 +427,7 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
                 <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div className="form-group">
                     <label className="form-label">Terms</label>
-                    <textarea className="form-input" rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} />
+                    <textarea className="form-input" rows={9} value={terms} onChange={(e) => setTerms(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Notes</label>
@@ -452,7 +462,7 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
                     <input type="date" className="form-input" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Tax (%)</label>
+                    <label className="form-label">VAT (%)</label>
                     <input
                       type="number"
                       min={0}
@@ -474,7 +484,7 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
                 <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {[
                     { label: 'Subtotal', value: subtotal },
-                    { label: `Tax (${taxPercent}%)`, value: taxAmount },
+                    { label: `VAT (${taxPercent}%)`, value: taxAmount },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex justify-between items-center">
                       <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>

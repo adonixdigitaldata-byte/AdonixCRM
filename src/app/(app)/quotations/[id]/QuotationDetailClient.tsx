@@ -26,11 +26,42 @@ const STATUS_TRANSITIONS: Record<QuotationStatus, QuotationStatus[]> = {
   EXPIRED: ['DRAFT', 'SENT'],
 }
 
+function renderFormattedText(text: string) {
+  if (!text) return null
+  return text.split('\n').map((line, index) => {
+    const cleanLine = line.trim()
+    const isHeaderLine = /^(?:\*\*|\*)?(Additional Terms|Terms & Conditions|Payment Terms|Payment Schedule)(?:\*\*|\*)?:?$/i.test(cleanLine)
+    const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+
+    return (
+      <div
+        key={index}
+        style={{
+          minHeight: line === '' ? '0.6em' : undefined,
+          fontWeight: isHeaderLine ? 700 : undefined,
+          color: isHeaderLine ? 'var(--text-primary)' : undefined,
+          marginTop: isHeaderLine ? 10 : undefined,
+          marginBottom: isHeaderLine ? 4 : undefined,
+        }}
+      >
+        {parts.map((part, i) => {
+          if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('*') && part.endsWith('*'))) {
+            const content = part.slice(part.startsWith('**') ? 2 : 1, part.endsWith('**') ? -2 : -1)
+            return <strong key={i} style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{content}</strong>
+          }
+          return part
+        })}
+      </div>
+    )
+  })
+}
+
 export default function QuotationDetailClient({ quotation: initial, profile }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [quotation, setQuotation] = useState(initial)
   const [updating, setUpdating] = useState(false)
+  const [showCr, setShowCr] = useState(true)
 
   // Delete Quotation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -57,7 +88,14 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
   const displayStatus = isExpired ? 'EXPIRED' : quotation.status
 
   function handlePrint() {
+    const originalTitle = document.title
+    const clientName = quotation.client?.name || quotation.client?.company
+    const printTitle = clientName ? `Quotation — Adonix for ${clientName}` : `Quotation — Adonix ${quotation.quote_number}`
+    document.title = printTitle
     window.print()
+    setTimeout(() => {
+      document.title = originalTitle
+    }, 1000)
   }
 
   async function updateStatus(newStatus: QuotationStatus) {
@@ -148,7 +186,16 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             {displayStatus}
           </span>
         </div>
-        <div className="flex gap-2 no-print">
+        <div className="flex gap-2 no-print items-center">
+          <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={showCr}
+              onChange={(e) => setShowCr(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Show CR No.
+          </label>
           <Link href={`/quotations/${quotation.id}/edit`} className="btn btn-outline btn-sm">
             <Edit2 size={14} />
             Edit quotation
@@ -190,7 +237,9 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
             <div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Adonix</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Adonix {showCr && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>(C.R. 4030138081)</span>}
+              </span>
               <p className="text-meta">Commercial Quotation</p>
             </div>
           </div>
@@ -255,7 +304,7 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
                       <td className="num tabular-nums" style={{ fontWeight: 600 }}>{curr} {Number(quotation.subtotal).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr>
-                      <td colSpan={3} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>Tax ({quotation.tax_percent}%)</td>
+                      <td colSpan={3} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({quotation.tax_percent}%)</td>
                       <td className="num tabular-nums" style={{ fontSize: 13 }}>{curr} {Number(quotation.tax_amount).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr style={{ borderTop: '1px solid var(--border)' }}>
@@ -275,7 +324,7 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
                   { label: 'Subtotal', value: quotation.subtotal },
-                  { label: `Tax (${quotation.tax_percent}%)`, value: quotation.tax_amount },
+                  { label: `VAT (${quotation.tax_percent}%)`, value: quotation.tax_amount },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between">
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>
@@ -337,8 +386,8 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             <div className="card" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
               <div className="card-header"><span className="text-section-header">Terms & Conditions</span></div>
               <div className="card-body">
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, wordBreak: 'break-word' }}>
-                  {quotation.terms}
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                  {renderFormattedText(quotation.terms)}
                 </div>
               </div>
             </div>
@@ -348,8 +397,8 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             <div className="card" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
               <div className="card-header"><span className="text-section-header">Notes & Remarks</span></div>
               <div className="card-body">
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, wordBreak: 'break-word' }}>
-                  {quotation.notes}
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                  {renderFormattedText(quotation.notes)}
                 </div>
               </div>
             </div>

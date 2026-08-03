@@ -37,7 +37,7 @@ const adminNav = [
     items: [
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
-      // { href: '/clients', label: 'Clients', icon: Building2 },
+      { href: '/clients', label: 'Clients', icon: Building2 },
     ],
   },
   {
@@ -63,7 +63,7 @@ const agentNav = [
     items: [
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
-      // { href: '/clients', label: 'Clients', icon: Building2 },
+      { href: '/clients', label: 'Clients', icon: Building2 },
     ],
   },
 ]

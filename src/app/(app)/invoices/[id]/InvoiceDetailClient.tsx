@@ -29,6 +29,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
   const [payments, setPayments] = useState(initialPayments)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
+  const [showCr, setShowCr] = useState(true)
 
   // Payment form states
   const [payAmount, setPayAmount] = useState('')
@@ -245,9 +246,16 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
   }
 
   // Automatically sync balance and status on load to correct any stale database records
-  useState(() => {
-    syncInvoiceBalanceAndStatus(initial.id)
-  })
+  function handlePrint() {
+    const originalTitle = document.title
+    const clientName = invoice.client?.name || invoice.client?.company
+    const printTitle = clientName ? `Invoice — Adonix for ${clientName}` : `Invoice — Adonix ${invoice.invoice_number}`
+    document.title = printTitle
+    window.print()
+    setTimeout(() => {
+      document.title = originalTitle
+    }, 1000)
+  }
 
   return (
     <div>
@@ -266,12 +274,21 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
             {isOverdue ? 'OVERDUE' : invoice.status.replace('_', ' ')}
           </span>
         </div>
-        <div className="flex gap-2 no-print flex-wrap">
+        <div className="flex gap-2 no-print flex-wrap items-center">
+          <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={showCr}
+              onChange={(e) => setShowCr(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Show CR No.
+          </label>
           <Link href={`/invoices/${invoice.id}/edit`} className="btn btn-outline btn-sm">
             <Edit2 size={14} />
             Edit invoice
           </Link>
-          <button className="btn btn-outline btn-sm" onClick={() => window.print()}>
+          <button className="btn btn-outline btn-sm" onClick={handlePrint}>
             <Printer size={14} />
             Print / PDF
           </button>
@@ -325,8 +342,10 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
             <div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Adonix</span>
-              <p className="text-meta">Tax Invoice & Billing Statement</p>
+              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Adonix {showCr && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>(C.R. 4030138081)</span>}
+              </span>
+              <p className="text-meta">VAT Invoice & Billing Statement</p>
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -387,7 +406,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                       <td className="num tabular-nums" style={{ fontWeight: 600 }}>{curr} {Number(invoice.subtotal).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr>
-                      <td colSpan={3} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>Tax ({invoice.tax_percent}%)</td>
+                      <td colSpan={3} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({invoice.tax_percent}%)</td>
                       <td className="num tabular-nums" style={{ fontSize: 13 }}>{curr} {Number(invoice.tax_amount).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr style={{ borderTop: '1px solid var(--border)' }}>
@@ -453,7 +472,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
                   { label: 'Subtotal', value: invoice.subtotal, color: undefined },
-                  { label: `Tax (${invoice.tax_percent}%)`, value: invoice.tax_amount, color: undefined },
+                  { label: `VAT (${invoice.tax_percent}%)`, value: invoice.tax_amount, color: undefined },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="flex justify-between">
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>

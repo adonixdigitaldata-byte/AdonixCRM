@@ -43,7 +43,17 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
   const [issueDate, setIssueDate] = useState(quotation.issue_date ?? new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState(quotation.valid_until ?? '')
   const [taxPercent, setTaxPercent] = useState(Number(quotation.tax_percent ?? 5))
-  const [terms, setTerms] = useState(quotation.terms ?? 'Payment due within 30 days of invoice date.')
+  const DEFAULT_TERMS = `50% Advance Payment – Due upon acceptance of the proposal and before project commencement.
+30% Milestone Payment – Due upon completion of the first review/demo and client approval to proceed.
+20% Final Payment – Due upon final delivery of the project and prior to deployment, handover, or transfer of source files.
+
+**Additional Terms**
+Project work will commence upon receipt of the initial 50% payment.
+Any additional features or changes outside the agreed scope will be quoted and billed separately as change requests.
+Delays in approvals or payments may impact the project timeline.
+All payments are non-refundable once the corresponding project phase has been completed.`
+
+  const [terms, setTerms] = useState(quotation.terms ?? DEFAULT_TERMS)
   const [notes, setNotes] = useState(quotation.notes ?? '')
   const [status, setStatus] = useState(quotation.status)
 
@@ -361,7 +371,7 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="form-group">
                   <label className="form-label">Terms</label>
-                  <textarea className="form-input" rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} />
+                  <textarea className="form-input" rows={9} value={terms} onChange={(e) => setTerms(e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Notes</label>
@@ -394,7 +404,7 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
                   <input type="date" className="form-input" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Tax (%)</label>
+                  <label className="form-label">VAT (%)</label>
                   <input
                     type="number" min={0} max={100} step="0.01" className="form-input"
                     value={taxPercent} onChange={(e) => setTaxPercent(parseFloat(e.target.value) || 0)}
@@ -411,7 +421,7 @@ export default function QuotationEditClient({ quotation, clients, profile }: Pro
                   <span className="tabular-nums">{currency} {subtotal.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Tax ({taxPercent}%)</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({taxPercent}%)</span>
                   <span className="tabular-nums">{currency} {taxAmount.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="divider" style={{ margin: '6px 0' }} />

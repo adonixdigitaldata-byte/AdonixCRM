@@ -3,8 +3,18 @@ import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import InvoiceDetailClient from './InvoiceDetailClient'
 
-export async function generateMetadata(): Promise<Metadata> {
-  return { title: 'Invoice' }
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const supabase = await createClient()
+  const { data: invoice } = await supabase
+    .from('invoices')
+    .select('invoice_number, client:clients(name, company)')
+    .eq('id', id)
+    .single()
+
+  const clientName = (invoice?.client as any)?.name || (invoice?.client as any)?.company
+  const title = clientName ? `Invoice — Adonix for ${clientName}` : 'Invoice'
+  return { title }
 }
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {

@@ -3,8 +3,18 @@ import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import QuotationDetailClient from './QuotationDetailClient'
 
-export async function generateMetadata(): Promise<Metadata> {
-  return { title: 'Quotation' }
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const supabase = await createClient()
+  const { data: quotation } = await supabase
+    .from('quotations')
+    .select('quote_number, client:clients(name, company)')
+    .eq('id', id)
+    .single()
+
+  const clientName = (quotation?.client as any)?.name || (quotation?.client as any)?.company
+  const title = clientName ? `Quotation — Adonix for ${clientName}` : 'Quotation'
+  return { title }
 }
 
 export default async function QuotationDetailPage({ params }: { params: Promise<{ id: string }> }) {

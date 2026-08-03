@@ -417,7 +417,7 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
                   <input type="date" className="form-input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Tax (%)</label>
+                  <label className="form-label">VAT (%)</label>
                   <input
                     type="number" min={0} max={100} step="0.01" className="form-input"
                     value={taxPercent} onChange={(e) => setTaxPercent(parseFloat(e.target.value) || 0)}
@@ -434,7 +434,7 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
                   <span className="tabular-nums">{currency} {subtotal.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Tax ({taxPercent}%)</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({taxPercent}%)</span>
                   <span className="tabular-nums">{currency} {taxAmount.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="divider" style={{ margin: '6px 0' }} />
