@@ -114,7 +114,7 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
             email: clientEmail.trim() || null,
             phone: clientPhone.trim() || null,
             address: clientAddress.trim() || null,
-            created_by: profile.id,
+            assigned_agent_id: profile.id,
           })
           .select('id')
           .single()
