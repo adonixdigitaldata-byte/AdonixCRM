@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import AgentDetailClient from './AgentDetailClient'
@@ -17,16 +17,19 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
     .from('profiles').select('role').eq('id', user.id).single()
   if (currentProfile?.role !== 'ADMIN') redirect('/leads')
 
+  // Use service client to bypass RLS policies for admin agent details
+  const serviceSupabase = await createServiceClient()
+
   // Fetch agent profile
-  const { data: agent } = await supabase
+  const { data: agent } = await serviceSupabase
     .from('profiles')
     .select('*')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
   if (!agent) notFound()
 
-  // Parallel queries: leads, stages, followups, activities, quotations, invoices
+  // Parallel queries: leads, stages, followups, activities, quotations, invoices, tasks
   const [
     { data: leads },
     { data: stages },
@@ -34,37 +37,48 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
     { data: activities },
     { data: quotations },
     { data: invoices },
+    { data: tasks },
   ] = await Promise.all([
-    supabase
+    serviceSupabase
       .from('leads')
       .select('id, name, phone, email, source, created_at, stage_id, stage:lead_stages(id, key, label, color_hex)')
       .eq('assigned_agent_id', id)
       .order('created_at', { ascending: false }),
-    supabase
+    serviceSupabase
       .from('lead_stages')
       .select('*')
       .order('sort_order'),
-    supabase
+    serviceSupabase
       .from('lead_followups')
       .select('id, lead_id, scheduled_at, is_completed, completed_at, note, outcome_note, lead:leads(id, name)')
       .eq('agent_id', id)
       .order('scheduled_at', { ascending: false })
       .limit(50),
-    supabase
+    serviceSupabase
       .from('lead_activities')
       .select('*, lead:leads(id, name)')
       .eq('performed_by', id)
       .order('created_at', { ascending: false })
       .limit(40),
-    supabase
+    serviceSupabase
       .from('quotations')
       .select('id, quote_number, status, currency, total, issue_date, created_at, client:clients(name), lead:leads(name)')
       .or(`created_by.eq.${id}`)
       .order('created_at', { ascending: false }),
-    supabase
+    serviceSupabase
       .from('invoices')
       .select('id, invoice_number, status, currency, total, amount_paid, issue_date, created_at, client:clients(name), lead:leads(name)')
       .or(`created_by.eq.${id}`)
+      .order('created_at', { ascending: false }),
+    serviceSupabase
+      .from('client_tasks')
+      .select(`
+        *,
+        client:clients(id, name, company),
+        assigned_employee:profiles!assigned_employee_id(id, name, email, role, specialization, avatar_url, work_status),
+        updates:client_task_updates(*)
+      `)
+      .eq('assigned_employee_id', id)
       .order('created_at', { ascending: false }),
   ])
 
@@ -102,6 +116,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
       activities={activities ?? []}
       quotations={agentQuotations}
       invoices={agentInvoices}
+      tasks={tasks ?? []}
       totalLeads={totalLeads}
       wonCount={wonCount}
       lostCount={lostCount}

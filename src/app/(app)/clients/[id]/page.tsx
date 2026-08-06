@@ -26,12 +26,26 @@ export default async function ClientDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // Fetch all active profiles (for manager assignment)
+  // Fetch all active profiles (for manager & employee assignment)
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, name')
+    .select('id, name, email, role, specialization, work_status, avatar_url')
     .eq('is_active', true)
     .order('name', { ascending: true })
+
+  // Fetch technical tasks for this client
+  const { data: clientTasks } = await supabase
+    .from('client_tasks')
+    .select(`
+      *,
+      assigned_employee:profiles!assigned_employee_id(id, name, email, role, specialization, work_status),
+      updates:client_task_updates(
+        id, task_id, author_id, update_type, status_from, status_to, body, attachment_url, created_at,
+        author:profiles(id, name, avatar_url)
+      )
+    `)
+    .eq('client_id', id)
+    .order('created_at', { ascending: false })
 
   // Fetch all invoices for this client
   const { data: invoices } = await supabase
@@ -58,6 +72,7 @@ export default async function ClientDetailPage({ params }: PageProps) {
     <ClientDetailClient
       client={client}
       profiles={profiles ?? []}
+      tasks={clientTasks ?? []}
       invoices={invoices ?? []}
       quotations={quotations ?? []}
       currentProfile={profile}

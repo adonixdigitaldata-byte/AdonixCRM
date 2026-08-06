@@ -40,7 +40,8 @@ import {
 
 interface Props {
   client: any
-  profiles: { id: string; name: string }[]
+  profiles: { id: string; name: string; email?: string; role?: string; specialization?: string; work_status?: string }[]
+  tasks?: any[]
   invoices: any[]
   quotations: any[]
   currentProfile?: any
@@ -68,13 +69,67 @@ function convertToSAR(amount: number, currency?: string): number {
   return amount * (rates[currency ?? 'SAR'] ?? 1.0)
 }
 
-export default function ClientDetailClient({ client, profiles, invoices, quotations, currentProfile }: Props) {
+export default function ClientDetailClient({ client, profiles, tasks = [], invoices, quotations, currentProfile }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState('')
+
+  // Item delete confirmation modal state
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; label: string; typeName: string; onDelete: () => void } | null>(null)
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
+  const [toastFeedback, setToastFeedback] = useState<{ message: string; type: 'success' | 'danger' } | null>(null)
+
+  function showFeedback(message: string, type: 'success' | 'danger' = 'success') {
+    setToastFeedback({ message, type })
+    setTimeout(() => setToastFeedback(null), 3000)
+  }
+
+  function triggerAnimatedDelete(id: string, deleteCallback: () => void, label: string) {
+    setDeletingItemId(id)
+    setTimeout(() => {
+      deleteCallback()
+      setDeletingItemId(null)
+      showFeedback(`✓ ${label} deleted successfully`)
+    }, 250)
+  }
+
+  // Delete client modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletingClient, setDeletingClient] = useState(false)
+
+  async function handleDeleteClient() {
+    if (deletingClient) return
+    setDeletingClient(true)
+    try {
+      await supabase.from('client_tasks').delete().eq('client_id', client.id)
+      await supabase.from('invoices').delete().eq('client_id', client.id)
+      await supabase.from('quotations').delete().eq('client_id', client.id)
+      await supabase.from('client_assets').delete().eq('client_id', client.id)
+
+      const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
+      if (err) throw err
+
+      router.push('/clients')
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete client')
+      setDeletingClient(false)
+    }
+  }
+
+  // Client Technical Tasks State
+  const [clientTasks, setClientTasks] = useState<any[]>(tasks)
+  const [showTaskModal, setShowTaskModal] = useState(false)
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskEmployeeId, setTaskEmployeeId] = useState('')
+  const [taskCategory, setTaskCategory] = useState('WEBSITE')
+  const [taskPriority, setTaskPriority] = useState('MEDIUM')
+  const [taskDueDate, setTaskDueDate] = useState('')
+  const [taskLink, setTaskLink] = useState('')
+  const [taskDescription, setTaskDescription] = useState('')
+  const [submittingTask, setSubmittingTask] = useState(false)
 
   // State for all editable client fields
   const [clientName, setClientName] = useState(client.name ?? '')
@@ -213,7 +268,38 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
   const [noteSearch, setNoteSearch] = useState('')
   const [notePage, setNotePage] = useState(1)
 
+  const [taskSearch, setTaskSearch] = useState('')
+  const [taskPage, setTaskPage] = useState(1)
+
   const itemsPerPage = 5
+
+  function canDeleteTask(task: any, profile: any): boolean {
+    if (!profile) return false
+    if (profile.role === 'ADMIN') return true
+    if (profile.role === 'ACCOUNT_MANAGER') {
+      const assignedRole = task.assigned_employee?.role
+      if (assignedRole === 'ADMIN' || assignedRole === 'ACCOUNT_MANAGER') {
+        return false
+      }
+      return true
+    }
+    return false
+  }
+
+  async function deleteTask(taskId: string) {
+    const targetTask = clientTasks.find((t) => t.id === taskId)
+    if (targetTask && !canDeleteTask(targetTask, currentProfile)) {
+      showFeedback('Permission denied: Account Managers cannot delete tasks assigned to Admins or Account Managers.', 'danger')
+      return
+    }
+    try {
+      const { error } = await supabase.from('client_tasks').delete().eq('id', taskId)
+      if (error) throw error
+      setClientTasks((prev) => prev.filter((t) => t.id !== taskId))
+    } catch (err: any) {
+      showFeedback(err.message || 'Failed to delete task', 'danger')
+    }
+  }
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
   function handleCopyText(text: string, id: string) {
@@ -224,6 +310,7 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
   }
 
   // Financial calculations
+  const totalQuotedAmount = quotations.reduce((sum, q) => sum + convertToSAR(Number(q.total), q.currency), 0)
   const totalInvoiced = invoices.reduce((sum, inv) => sum + convertToSAR(Number(inv.total), inv.currency), 0)
   const totalEarned = invoices.reduce((sum, inv) => sum + convertToSAR(Number(inv.amount_paid), inv.currency), 0)
   const outstandingBalance = totalInvoiced - totalEarned
@@ -283,8 +370,10 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
     setEditingCredId(null)
   }
 
-  function deleteCredential(id: string) {
-    setCredentials(credentials.filter((c) => c.id !== id))
+  async function deleteCredential(id: string) {
+    const updated = credentials.filter((c) => c.id !== id)
+    setCredentials(updated)
+    await supabase.from('clients').update({ credentials: updated }).eq('id', client.id)
   }
 
   // Handlers for Secondary Contacts
@@ -316,8 +405,10 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
     setEditingContactId(null)
   }
 
-  function deleteSecondaryContact(id: string) {
-    setSecondaryContacts(secondaryContacts.filter((c) => c.id !== id))
+  async function deleteSecondaryContact(id: string) {
+    const updated = secondaryContacts.filter((c) => c.id !== id)
+    setSecondaryContacts(updated)
+    await supabase.from('clients').update({ secondary_contacts: updated }).eq('id', client.id)
   }
 
   // Handlers for Custom Links
@@ -329,8 +420,10 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
     setShowAddLink(false)
   }
 
-  function deleteServiceLink(id: string) {
-    setServiceLinks(serviceLinks.filter((l) => l.id !== id))
+  async function deleteServiceLink(id: string) {
+    const updated = serviceLinks.filter((l) => l.id !== id)
+    setServiceLinks(updated)
+    await supabase.from('clients').update({ service_links: updated }).eq('id', client.id)
   }
 
   function togglePassword(id: string) {
@@ -394,8 +487,10 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
     setEditingWebsiteId(null)
   }
 
-  function deleteWebsite(id: string) {
-    setWebsites(websites.filter((w) => w.id !== id))
+  async function deleteWebsite(id: string) {
+    const updated = websites.filter((w) => w.id !== id)
+    setWebsites(updated)
+    await supabase.from('clients').update({ website_url: JSON.stringify(updated) }).eq('id', client.id)
   }
 
   // Multiple Reports handlers
@@ -437,7 +532,7 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
     setEditingReportId(null)
   }
 
-  function deleteReport(id: string) {
+  async function deleteReport(id: string) {
     const updated = monthlyReports.filter((r) => r.id !== id)
     setMonthlyReports(updated)
 
@@ -446,22 +541,27 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
     if (remainingYears.length > 0 && !remainingYears.includes(reportViewYear)) {
       setReportViewYear(remainingYears[0])
     }
+    await supabase.from('clients').update({ report_link: updated.length > 0 ? JSON.stringify(updated) : null }).eq('id', client.id)
   }
 
   // Multiple Notes Timeline handlers
-  function addNote() {
+  async function addNote() {
     if (!newNoteBody.trim()) return
     const item = {
       id: Math.random().toString(36).slice(2),
       body: newNoteBody.trim(),
       created_at: new Date().toISOString(),
     }
-    setNotesList([item, ...notesList]) // Newest note on top
+    const updated = [item, ...notesList]
+    setNotesList(updated) // Newest note on top
     setNewNoteBody('')
+    await supabase.from('clients').update({ notes: JSON.stringify(updated) }).eq('id', client.id)
   }
 
-  function deleteNote(id: string) {
-    setNotesList(notesList.filter((n) => n.id !== id))
+  async function deleteNote(id: string) {
+    const updated = notesList.filter((n) => n.id !== id)
+    setNotesList(updated)
+    await supabase.from('clients').update({ notes: updated.length > 0 ? JSON.stringify(updated) : null }).eq('id', client.id)
   }
 
   // Edit notes
@@ -470,14 +570,14 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
     setEditingNoteBody(note.body)
   }
 
-  function saveEditedNote() {
+  async function saveEditedNote() {
     if (!editingNoteBody.trim()) return
-    setNotesList(
-      notesList.map((n) =>
-        n.id === editingNoteId ? { ...n, body: editingNoteBody.trim() } : n
-      )
+    const updated = notesList.map((n) =>
+      n.id === editingNoteId ? { ...n, body: editingNoteBody.trim() } : n
     )
+    setNotesList(updated)
     setEditingNoteId(null)
+    await supabase.from('clients').update({ notes: JSON.stringify(updated) }).eq('id', client.id)
   }
 
   // Database Save Handler
@@ -585,33 +685,71 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
   const totalNotePages = Math.ceil(filteredNotesList.length / itemsPerPage) || 1
   const paginatedNotesList = filteredNotesList.slice((notePage - 1) * itemsPerPage, notePage * itemsPerPage)
 
+  // Filter & Paginate Client Technical Tasks
+  const filteredClientTasks = clientTasks.filter((t) => {
+    const query = taskSearch.toLowerCase().trim()
+    return !query || (t.title ?? '').toLowerCase().includes(query) || (t.category ?? '').toLowerCase().includes(query) || (t.assigned_employee?.name ?? '').toLowerCase().includes(query) || (t.status ?? '').toLowerCase().includes(query)
+  })
+  const totalTaskPages = Math.ceil(filteredClientTasks.length / itemsPerPage) || 1
+  const paginatedClientTasks = filteredClientTasks.slice((taskPage - 1) * itemsPerPage, taskPage * itemsPerPage)
+
   return (
     <div>
-      {/* 100% Custom bulletproof static header to prevent layout spacienss/stretching on all viewports */}
-      <div className="no-print" style={{
+      {/* Bulletproof sticky page header with Save changes CTA */}
+      <div className="page-header no-print" style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
         display: 'flex',
         alignItems: 'center',
-        padding: '16px 24px',
+        justifyContent: 'space-between',
+        padding: '12px 24px',
         borderBottom: '1px solid var(--border)',
         background: 'var(--surface)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        width: '100%',
+        boxSizing: 'border-box',
         gap: 16
       }}>
-        <button
-          className="btn btn-ghost btn-icon btn-sm"
-          onClick={() => router.push('/clients')}
-          style={{ flexShrink: 0, width: 32, height: 32, padding: 0, justifyContent: 'center' }}
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>{clientName}</h1>
-          <p className="text-meta" style={{ marginTop: 2, margin: 0, fontSize: 12 }}>
-            {companyName ? `${companyName} · ` : ''}Client Profile Portal
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button
+            className="btn btn-ghost btn-icon btn-sm"
+            onClick={() => router.push('/clients')}
+            style={{ flexShrink: 0, width: 32, height: 32, padding: 0, justifyContent: 'center' }}
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>{clientName}</h1>
+            <p className="text-meta" style={{ marginTop: 2, margin: 0, fontSize: 12 }}>
+              {companyName ? `${companyName} · ` : ''}Client Profile Portal
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {saveSuccess && <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>✓ Saved</span>}
+          {error && <span style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 500 }}>✕ {error}</span>}
+
+          <button className="btn btn-primary btn-sm" onClick={handleSaveChanges} disabled={saving} style={{ display: 'inline-flex', gap: 6, fontWeight: 600 }}>
+            <Save size={14} />
+            {saving ? 'Saving...' : 'Save changes'}
+          </button>
+
+          {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setShowDeleteModal(true)}
+              style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}
+            >
+              <Trash2 size={14} /> Delete Client
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 100 }}>
+      <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 160 }}>
         {/* Expired/Expiring Contract Banners */}
         {isContractExpired && (
           <div className="alert alert-danger" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -636,15 +774,27 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
         {/* Financial Metrics Summary */}
         <div className="rg-stats">
           <div className="card" style={{ padding: '14px 16px' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Total Quoted</span>
+            <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: '#2563eb' }}>
+              SAR {totalQuotedAmount.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              {quotations.length} {quotations.length === 1 ? 'quotation' : 'quotations'}
+            </div>
+          </div>
+          <div className="card" style={{ padding: '14px 16px' }}>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Total Invoiced</span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
-              SAR {totalInvoiced.toLocaleString('en', { minimumFractionDigits: 2 })}
+              SAR {totalInvoiced.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              {invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}
             </div>
           </div>
           <div className="card" style={{ padding: '14px 16px' }}>
             <span style={{ fontSize: 12, color: 'var(--success)', fontWeight: 500 }}>Earned Revenue</span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: 'var(--success)' }}>
-              SAR {totalEarned.toLocaleString('en', { minimumFractionDigits: 2 })}
+              SAR {totalEarned.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
           <div className="card" style={{ padding: '14px 16px' }}>
@@ -652,14 +802,14 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
               Outstanding Balance
             </span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: outstandingBalance > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>
-              SAR {outstandingBalance.toLocaleString('en', { minimumFractionDigits: 2 })}
+              SAR {outstandingBalance.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
           {overdueAmount > 0 && (
             <div className="card" style={{ padding: '14px 16px' }}>
               <span style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 500 }}>Overdue Amount</span>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: 'var(--danger)' }}>
-                SAR {overdueAmount.toLocaleString('en', { minimumFractionDigits: 2 })}
+                SAR {overdueAmount.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           )}
@@ -676,12 +826,307 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
           {/* Main Column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             
+            {/* Technical Tasks & Deliverables Section */}
+            <div className="card">
+              <div className="card-header flex items-center justify-between" style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Layers size={16} color="var(--accent)" />
+                  <span className="text-section-header">Technical Tasks &amp; Deliverables</span>
+                  <span className="badge" style={{ background: 'var(--bg)', color: 'var(--text-secondary)', fontSize: 11 }}>
+                    {clientTasks.filter((t) => t.status === 'COMPLETED').length} of {clientTasks.length} Completed
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {clientTasks.length > 0 && (
+                    <div style={{ position: 'relative' }}>
+                      <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                      <input
+                        className="form-input"
+                        placeholder="Search tasks..."
+                        value={taskSearch}
+                        onChange={(e) => { setTaskSearch(e.target.value); setTaskPage(1); }}
+                        style={{ fontSize: 11, padding: '3px 8px 3px 24px', width: 140 }}
+                      />
+                    </div>
+                  )}
+                  {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') && (
+                    <button
+                      className="btn btn-primary btn-xs"
+                      onClick={() => setShowTaskModal(true)}
+                    >
+                      <Plus size={12} /> Add Technical Task
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="card-body" style={{ padding: 0 }}>
+                {filteredClientTasks.length === 0 ? (
+                  <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+                    {taskSearch ? 'No tasks match search query.' : 'No technical tasks assigned for this client yet. Click "+ Add Technical Task" above to assign deliverables.'}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {paginatedClientTasks.map((t) => (
+                      <div
+                        key={t.id}
+                        onClick={() => router.push(`/tasks?taskId=${t.id}`)}
+                        style={{
+                          padding: '12px 16px',
+                          borderBottom: '1px solid var(--border)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 12,
+                          flexWrap: 'wrap',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover, #F8FAFC)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <div style={{ flex: '1 1 240px' }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {t.title}
+                            <ExternalLink size={11} style={{ color: 'var(--text-tertiary)' }} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: '#EFF6FF', color: '#2563EB' }}>
+                              {t.category}
+                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                              Specialist: <strong>{t.assigned_employee?.name ?? 'Unassigned'}</strong>
+                            </span>
+                            {t.due_date && (
+                              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                Target: {t.due_date}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} onClick={(e) => e.stopPropagation()}>
+                          {t.deliverable_link && (
+                            <a
+                              href={t.deliverable_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-outline btn-xs"
+                              style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}
+                            >
+                              Folder <ExternalLink size={10} />
+                            </a>
+                          )}
+
+                          <select
+                            className="form-select"
+                            value={t.status}
+                            onChange={async (e) => {
+                              const newStatus = e.target.value
+                              setClientTasks(clientTasks.map((item) => item.id === t.id ? { ...item, status: newStatus } : item))
+                              await supabase.from('client_tasks').update({ status: newStatus }).eq('id', t.id)
+                            }}
+                            style={{
+                              padding: '2px 6px', fontSize: 11, fontWeight: 600,
+                              background: t.status === 'COMPLETED' ? '#DCFCE7' : t.status === 'IN_PROGRESS' ? '#EFF6FF' : '#F4F4F5',
+                              color: t.status === 'COMPLETED' ? '#15803D' : t.status === 'IN_PROGRESS' ? '#1D4ED8' : '#52525B',
+                              border: 'none', borderRadius: 4
+                            }}
+                          >
+                            <option value="PENDING">To Do</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="UNDER_REVIEW">Under Review</option>
+                            <option value="COMPLETED">Completed</option>
+                            <option value="BLOCKED">Blocked</option>
+                          </select>
+
+                          {canDeleteTask(t, currentProfile) && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-icon btn-xs"
+                              onClick={() => setItemToDelete({ id: t.id, label: t.title, typeName: 'Technical Task', onDelete: () => deleteTask(t.id) })}
+                              style={{ color: 'var(--danger)' }}
+                              title="Delete Technical Task"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <ClientPagination
+                      currentPage={taskPage}
+                      totalItems={filteredClientTasks.length}
+                      pageSize={itemsPerPage}
+                      onPageChange={setTaskPage}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ADD TECHNICAL TASK MODAL FOR THIS CLIENT */}
+            {showTaskModal && (
+              <div className="modal-backdrop" onClick={() => setShowTaskModal(false)}>
+                <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                  <div className="modal-header">
+                    <span className="text-section-header">Assign Technical Task for {clientName}</span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setShowTaskModal(false)}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault()
+                    if (!taskTitle.trim() || submittingTask) return
+                    setSubmittingTask(true)
+                    try {
+                      const { data, error: err } = await supabase
+                        .from('client_tasks')
+                        .insert({
+                          client_id: client.id,
+                          assigned_employee_id: taskEmployeeId || null,
+                          created_by: currentProfile?.id || null,
+                          title: taskTitle.trim(),
+                          category: taskCategory,
+                          priority: taskPriority,
+                          due_date: taskDueDate || null,
+                          deliverable_link: taskLink.trim() || null,
+                          description: taskDescription.trim() || null,
+                          status: 'PENDING',
+                        })
+                        .select(`
+                          *,
+                          assigned_employee:profiles!assigned_employee_id(id, name, email, role, specialization, work_status)
+                        `)
+                        .single()
+
+                      if (err) throw err
+                      setClientTasks([data, ...clientTasks])
+                      setShowTaskModal(false)
+                      setTaskTitle('')
+                      setTaskEmployeeId('')
+                      setTaskDescription('')
+                      setTaskLink('')
+                    } catch (errEx: any) {
+                      alert(errEx.message || 'Failed to create task')
+                    } finally {
+                      setSubmittingTask(false)
+                    }
+                  }}>
+                    <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div className="form-group">
+                        <label className="form-label form-label-required">Task / Deliverable Title</label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. Next.js Website Setup, 12 AI Reels, GMB Optimization"
+                          value={taskTitle}
+                          onChange={(e) => setTaskTitle(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <div className="form-group" style={{ flex: '1 1 180px' }}>
+                          <label className="form-label">Category</label>
+                          <select
+                            className="form-select"
+                            value={taskCategory}
+                            onChange={(e) => setTaskCategory(e.target.value)}
+                          >
+                            <option value="WEBSITE">🌐 Website Dev</option>
+                            <option value="SOCIAL_MEDIA">📱 Social Media</option>
+                            <option value="ADS">🎯 Paid Ads</option>
+                            <option value="GMB">📍 GMB & SEO</option>
+                            <option value="VIDEO_AI">🎬 Video / AI</option>
+                            <option value="DESIGN">🎨 Design</option>
+                            <option value="SEO">🚀 Organic SEO</option>
+                            <option value="OTHER">📋 General</option>
+                          </select>
+                        </div>
+
+                        <div className="form-group" style={{ flex: '1 1 180px' }}>
+                          <label className="form-label">Assign Specialist / Employee</label>
+                          <select
+                            className="form-select"
+                            value={taskEmployeeId}
+                            onChange={(e) => setTaskEmployeeId(e.target.value)}
+                          >
+                            <option value="">Unassigned</option>
+                            {profiles.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.specialization || p.role}) {p.work_status === 'BUSY' ? ' (Busy)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <div className="form-group" style={{ flex: '1 1 180px' }}>
+                          <label className="form-label">Priority</label>
+                          <select
+                            className="form-select"
+                            value={taskPriority}
+                            onChange={(e) => setTaskPriority(e.target.value)}
+                          >
+                            <option value="LOW">Low</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HIGH">High</option>
+                            <option value="URGENT">Urgent</option>
+                          </select>
+                        </div>
+
+                        <div className="form-group" style={{ flex: '1 1 180px' }}>
+                          <label className="form-label">Target Due Date</label>
+                          <input
+                            type="date"
+                            className="form-input"
+                            value={taskDueDate}
+                            onChange={(e) => setTaskDueDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Deliverable Folder / URL (Optional)</label>
+                        <input
+                          className="form-input"
+                          placeholder="https://drive.google.com/... or Figma link"
+                          value={taskLink}
+                          onChange={(e) => setTaskLink(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Instructions / Guidelines</label>
+                        <textarea
+                          className="form-input"
+                          rows={2}
+                          placeholder="Instructions for the assigned technical employee..."
+                          value={taskDescription}
+                          onChange={(e) => setTaskDescription(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowTaskModal(false)}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary btn-sm" disabled={submittingTask}>
+                        {submittingTask ? 'Creating...' : 'Assign Task'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+            
             {/* Credentials Vault */}
             <div className="card">
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <div className="flex items-center gap-2">
                   <Shield size={16} style={{ color: 'var(--text-secondary)' }} />
-                  <span className="text-section-header">Credentials & Logins Vault</span>
+                  <span className="text-section-header">Credentials &amp; Logins Vault</span>
                 </div>
                 <div className="search-input-wrapper" style={{ position: 'relative', width: 220 }}>
                   <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
@@ -704,23 +1149,32 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                   <p className="text-meta" style={{ padding: '8px 0' }}>{credSearch ? 'No credentials match search' : 'No credentials stored for this client.'}</p>
                 ) : (
                   <>
-                    <div className="table-wrapper">
-                      <table className="table table-compact">
+                    <div className="table-wrapper" style={{ width: '100%', overflowX: 'hidden' }}>
+                      <table className="table table-compact" style={{ width: '100%', tableLayout: 'fixed' }}>
                         <thead>
                           <tr>
-                            <th>Service</th>
-                            <th>Username</th>
-                            <th>Password</th>
-                            <th>Login URL</th>
-                            <th>Notes</th>
-                            <th style={{ width: 80 }}></th>
+                            <th style={{ width: '18%' }}>Service</th>
+                            <th style={{ width: '22%' }}>Username</th>
+                            <th style={{ width: '20%' }}>Password</th>
+                            <th style={{ width: '18%' }}>Login URL</th>
+                            <th style={{ width: '22%' }}>Notes</th>
+                            <th style={{ width: '90px' }}></th>
                           </tr>
                         </thead>
                         <tbody>
                           {paginatedCredentials.map((cred) => {
                             const isEditing = editingCredId === cred.id
+                            const isDeletingThis = deletingItemId === cred.id
                             return (
-                              <tr key={cred.id}>
+                              <tr
+                                key={cred.id}
+                                style={{
+                                  transition: 'all 0.25s ease-out',
+                                  opacity: isDeletingThis ? 0 : 1,
+                                  transform: isDeletingThis ? 'scale(0.96)' : 'none',
+                                  background: isDeletingThis ? '#FEF2F2' : undefined,
+                                }}
+                              >
                                 {isEditing ? (
                                   <>
                                     <td>
@@ -741,6 +1195,7 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                     </td>
                                     <td>
                                       <input
+                                        type="text"
                                         className="form-input"
                                         value={editCredPassword}
                                         onChange={(e) => setEditCredPassword(e.target.value)}
@@ -776,31 +1231,38 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                   </>
                                 ) : (
                                   <>
-                                    <td style={{ fontWeight: 600, wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '120px' }}>{cred.service}</td>
-                                    <td style={{ wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '120px' }}>
-                                      <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-                                        <span>{cred.username ?? '—'}</span>
+                                    <td style={{ fontWeight: 600, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{cred.service}</td>
+                                    <td style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                                      <div className="flex items-center gap-1" style={{ flexWrap: 'wrap' }}>
+                                        <span style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{cred.username ?? '—'}</span>
                                         {cred.username && (
                                           <button
                                             type="button"
                                             className="btn btn-ghost btn-icon btn-xs"
                                             onClick={() => handleCopyText(cred.username, `${cred.id}-username`)}
                                             title="Copy Username"
-                                            style={{ color: copiedId === `${cred.id}-username` ? 'var(--success)' : 'var(--text-tertiary)' }}
+                                            style={{ color: copiedId === `${cred.id}-username` ? 'var(--success)' : 'var(--text-tertiary)', flexShrink: 0 }}
                                           >
                                             {copiedId === `${cred.id}-username` ? <Check size={12} /> : <Copy size={12} />}
                                           </button>
                                         )}
                                       </div>
                                     </td>
-                                    <td style={{ fontVariantNumeric: 'tabular-nums', wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '120px' }}>
-                                      <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-                                        <span>{visiblePasswords[cred.id] ? cred.password : '••••••••'}</span>
+                                    <td style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                                      <div className="flex items-center gap-1" style={{ flexWrap: 'wrap' }}>
+                                        <span style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                                          {visiblePasswords[cred.id]
+                                            ? cred.password
+                                            : cred.password
+                                            ? '••••••••'
+                                            : '—'}
+                                        </span>
                                         <button
                                           type="button"
                                           className="btn btn-ghost btn-icon btn-xs"
                                           onClick={() => togglePassword(cred.id)}
-                                          title={visiblePasswords[cred.id] ? "Hide Password" : "Show Password"}
+                                          title={visiblePasswords[cred.id] ? 'Hide Password' : 'Show Password'}
+                                          style={{ flexShrink: 0 }}
                                         >
                                           {visiblePasswords[cred.id] ? <EyeOff size={12} /> : <Eye size={12} />}
                                         </button>
@@ -810,25 +1272,25 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                             className="btn btn-ghost btn-icon btn-xs"
                                             onClick={() => handleCopyText(cred.password, `${cred.id}-password`)}
                                             title="Copy Password"
-                                            style={{ color: copiedId === `${cred.id}-password` ? 'var(--success)' : 'var(--text-tertiary)' }}
+                                            style={{ color: copiedId === `${cred.id}-password` ? 'var(--success)' : 'var(--text-tertiary)', flexShrink: 0 }}
                                           >
                                             {copiedId === `${cred.id}-password` ? <Check size={12} /> : <Copy size={12} />}
                                           </button>
                                         )}
                                       </div>
                                     </td>
-                                    <td>
+                                    <td style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                                       {cred.url ? (
-                                        <a href={cred.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12 }}>
-                                          Visit link <ExternalLink size={10} />
+                                        <a href={cred.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                                          Visit link <ExternalLink size={10} style={{ flexShrink: 0 }} />
                                         </a>
                                       ) : (
                                         '—'
                                       )}
                                     </td>
-                                    <td style={{ color: 'var(--text-secondary)', fontSize: 12, wordBreak: 'break-all', whiteSpace: 'normal', minWidth: '150px' }}>{cred.notes ?? '—'}</td>
-                                    <td>
-                                      <div className="flex gap-2">
+                                    <td style={{ color: 'var(--text-secondary)', fontSize: 12, wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal' }}>{cred.notes ?? '—'}</td>
+                                    <td style={{ textAlign: 'right' }}>
+                                      <div className="flex gap-2 justify-end">
                                         <button
                                           type="button"
                                           className="btn btn-ghost btn-icon btn-xs"
@@ -840,8 +1302,9 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                         <button
                                           type="button"
                                           className="btn btn-ghost btn-icon btn-xs"
-                                          onClick={() => deleteCredential(cred.id)}
+                                          onClick={() => setItemToDelete({ id: cred.id, label: cred.service, typeName: 'Credential', onDelete: () => deleteCredential(cred.id) })}
                                           style={{ color: 'var(--danger)' }}
+                                          title="Delete credential"
                                         >
                                           <Trash2 size={13} />
                                         </button>
@@ -936,7 +1399,7 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <div className="flex items-center gap-2">
                   <Layers size={16} style={{ color: 'var(--text-secondary)' }} />
-                  <span className="text-section-header">Custom Reports & Deliverables Links</span>
+                  <span className="text-section-header">Custom Reports &amp; Deliverables Links</span>
                 </div>
                 <div className="search-input-wrapper" style={{ position: 'relative', width: 220 }}>
                   <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
@@ -959,21 +1422,30 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                   <p className="text-meta" style={{ padding: '8px 0' }}>{linkSearch ? 'No deliverables match search' : 'No custom deliverables recorded.'}</p>
                 ) : (
                   <>
-                    <div className="table-wrapper">
-                      <table className="table table-compact">
+                    <div className="table-wrapper" style={{ width: '100%', overflowX: 'hidden' }}>
+                      <table className="table table-compact" style={{ width: '100%', tableLayout: 'fixed' }}>
                         <thead>
                           <tr>
-                            <th>Label</th>
-                            <th>URL</th>
-                            <th>Notes</th>
-                            <th style={{ width: 80 }}></th>
+                            <th style={{ width: '25%' }}>Label</th>
+                            <th style={{ width: '35%' }}>URL</th>
+                            <th style={{ width: '40%' }}>Notes</th>
+                            <th style={{ width: '90px' }}></th>
                           </tr>
                         </thead>
                         <tbody>
                           {paginatedServiceLinks.map((link) => {
                             const isEditing = editingLinkId === link.id
+                            const isDeletingThis = deletingItemId === link.id
                             return (
-                              <tr key={link.id}>
+                              <tr
+                                key={link.id}
+                                style={{
+                                  transition: 'all 0.25s ease-out',
+                                  opacity: isDeletingThis ? 0 : 1,
+                                  transform: isDeletingThis ? 'scale(0.96)' : 'none',
+                                  background: isDeletingThis ? '#FEF2F2' : undefined,
+                                }}
+                              >
                                 {isEditing ? (
                                   <>
                                     <td>
@@ -1013,15 +1485,15 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                   </>
                                 ) : (
                                   <>
-                                    <td style={{ fontWeight: 600 }}>{link.label}</td>
-                                    <td>
-                                      <a href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12 }}>
-                                        Open link <ExternalLink size={10} />
+                                    <td style={{ fontWeight: 600, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{link.label}</td>
+                                    <td style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                                      <a href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline" style={{ fontSize: 12, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                                        Open link <ExternalLink size={10} style={{ flexShrink: 0 }} />
                                       </a>
                                     </td>
-                                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{link.notes ?? '—'}</td>
-                                    <td>
-                                      <div className="flex gap-2">
+                                    <td style={{ color: 'var(--text-secondary)', fontSize: 12, wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal' }}>{link.notes ?? '—'}</td>
+                                    <td style={{ textAlign: 'right' }}>
+                                      <div className="flex gap-2 justify-end">
                                         <button
                                           type="button"
                                           className="btn btn-ghost btn-icon btn-xs"
@@ -1033,8 +1505,9 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                         <button
                                           type="button"
                                           className="btn btn-ghost btn-icon btn-xs"
-                                          onClick={() => deleteServiceLink(link.id)}
+                                          onClick={() => setItemToDelete({ id: link.id, label: link.label, typeName: 'Deliverable Link', onDelete: () => deleteServiceLink(link.id) })}
                                           style={{ color: 'var(--danger)' }}
+                                          title="Delete deliverable link"
                                         >
                                           <Trash2 size={13} />
                                         </button>
@@ -1156,17 +1629,21 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                     <>
                       {paginatedNotesList.map((note) => {
                         const isEditing = editingNoteId === note.id
+                        const isDeletingThis = deletingItemId === note.id
                         return (
                           <div
                             key={note.id}
                             style={{
                               padding: 12,
-                              background: 'var(--bg)',
+                              background: isDeletingThis ? '#FEF2F2' : 'var(--bg)',
                               border: '1px solid var(--border)',
                               borderRadius: 'var(--radius-sm)',
                               display: 'flex',
                               flexDirection: 'column',
                               gap: 8,
+                              transition: 'all 0.25s ease-out',
+                              opacity: isDeletingThis ? 0 : 1,
+                              transform: isDeletingThis ? 'scale(0.96)' : 'none',
                             }}
                           >
                             <div className="flex justify-between items-center" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -1189,8 +1666,9 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                   <button
                                     type="button"
                                     className="btn btn-ghost btn-icon btn-xs"
-                                    onClick={() => deleteNote(note.id)}
+                                    onClick={() => setItemToDelete({ id: note.id, label: 'Reference Note', typeName: 'Reference Note', onDelete: () => deleteNote(note.id) })}
                                     style={{ color: 'var(--danger)', padding: 2 }}
+                                    title="Delete note"
                                   >
                                     <Trash2 size={12} />
                                   </button>
@@ -1202,7 +1680,7 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 <textarea
                                   className="form-input"
-                                  rows={2}
+                                  rows={3}
                                   value={editingNoteBody}
                                   onChange={(e) => setEditingNoteBody(e.target.value)}
                                   style={{ fontSize: 13 }}
@@ -1217,9 +1695,9 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                 </div>
                               </div>
                             ) : (
-                              <p style={{ fontSize: 13, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-word', color: 'var(--text-primary)', margin: 0 }}>
+                              <div style={{ fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
                                 {note.body}
-                              </p>
+                              </div>
                             )}
                           </div>
                         )
@@ -1236,32 +1714,43 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
               </div>
             </div>
 
-            {/* Secondary Contacts Directory */}
+            {/* Secondary Contacts & Account Managers */}
             <div className="card">
-              <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Users2 size={16} style={{ color: 'var(--text-secondary)' }} />
-                <span className="text-section-header">Secondary Contacts</span>
+              <div className="card-header flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users2 size={16} style={{ color: 'var(--text-secondary)' }} />
+                  <span className="text-section-header">Secondary Contacts &amp; People</span>
+                </div>
               </div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {secondaryContacts.length === 0 ? (
-                  <p className="text-meta" style={{ padding: '8px 0' }}>No secondary contacts added.</p>
+                  <p className="text-meta" style={{ padding: '8px 0' }}>No alternate contacts added.</p>
                 ) : (
-                  <div className="table-wrapper">
-                    <table className="table table-compact">
+                  <div className="table-wrapper" style={{ width: '100%', overflowX: 'hidden' }}>
+                    <table className="table table-compact" style={{ width: '100%', tableLayout: 'fixed' }}>
                       <thead>
                         <tr>
-                          <th>Name</th>
-                          <th>Role</th>
-                          <th>Email</th>
-                          <th>Phone</th>
-                          <th style={{ width: 80 }}></th>
+                          <th style={{ width: '25%' }}>Name</th>
+                          <th style={{ width: '20%' }}>Role</th>
+                          <th style={{ width: '30%' }}>Email</th>
+                          <th style={{ width: '25%' }}>Phone</th>
+                          <th style={{ width: '90px' }}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {secondaryContacts.map((contact) => {
                           const isEditing = editingContactId === contact.id
+                          const isDeletingThis = deletingItemId === contact.id
                           return (
-                            <tr key={contact.id}>
+                            <tr
+                              key={contact.id}
+                              style={{
+                                transition: 'all 0.25s ease-out',
+                                opacity: isDeletingThis ? 0 : 1,
+                                transform: isDeletingThis ? 'scale(0.96)' : 'none',
+                                background: isDeletingThis ? '#FEF2F2' : undefined,
+                              }}
+                            >
                               {isEditing ? (
                                 <>
                                   <td>
@@ -1309,12 +1798,12 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                 </>
                               ) : (
                                 <>
-                                  <td style={{ fontWeight: 600 }}>{contact.name}</td>
-                                  <td>{contact.role ?? '—'}</td>
-                                  <td>{contact.email ? <a href={`mailto:${contact.email}`} className="text-primary hover:underline">{contact.email}</a> : '—'}</td>
-                                  <td>{contact.phone ?? '—'}</td>
-                                  <td>
-                                    <div className="flex gap-2">
+                                  <td style={{ fontWeight: 600, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{contact.name}</td>
+                                  <td style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{contact.role ?? '—'}</td>
+                                  <td style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{contact.email ? <a href={`mailto:${contact.email}`} className="text-primary hover:underline" style={{ wordBreak: 'break-all' }}>{contact.email}</a> : '—'}</td>
+                                  <td style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>{contact.phone ?? '—'}</td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <div className="flex gap-2 justify-end">
                                       <button
                                         type="button"
                                         className="btn btn-ghost btn-icon btn-xs"
@@ -1326,8 +1815,9 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                       <button
                                         type="button"
                                         className="btn btn-ghost btn-icon btn-xs"
-                                        onClick={() => deleteSecondaryContact(contact.id)}
+                                        onClick={() => setItemToDelete({ id: contact.id, label: contact.name, typeName: 'Alternate Contact', onDelete: () => deleteSecondaryContact(contact.id) })}
                                         style={{ color: 'var(--danger)' }}
+                                        title="Delete contact"
                                       >
                                         <Trash2 size={13} />
                                       </button>
@@ -1510,6 +2000,7 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                   />
                 </div>
               </div>
+              
               <div className="card-body" style={{ padding: 0 }}>
                 {paginatedQuotations.length === 0 ? (
                   <p className="text-meta" style={{ padding: 20 }}>No quotations found.</p>
@@ -1522,7 +2013,6 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                             <th>Quote #</th>
                             <th>Status</th>
                             <th>Issue Date</th>
-                            <th>Valid Until</th>
                             <th className="num">Total</th>
                           </tr>
                         </thead>
@@ -1540,7 +2030,6 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                 </span>
                               </td>
                               <td>{format(new Date(q.issue_date), 'dd MMM yyyy')}</td>
-                              <td>{q.valid_until ? format(new Date(q.valid_until), 'dd MMM yyyy') : '—'}</td>
                               <td className="num tabular-nums">{q.currency} {Number(q.total).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                             </tr>
                           ))}
@@ -1652,109 +2141,94 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
 
             {/* Account Management & Retainer Billing */}
             <div className="card">
-              <div className="card-header"><span className="text-section-header">Account settings</span></div>
+              <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <User size={16} style={{ color: 'var(--text-secondary)' }} />
+                <span className="text-section-header">Account &amp; Retainer</span>
+              </div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                
                 <div className="form-group">
-                  <label className="form-label">Client Status</label>
-                  <select className="form-select" value={clientStatus} onChange={(e) => setClientStatus(e.target.value)}>
-                    <option value="ACTIVE">Active</option>
-                    <option value="VIP">VIP</option>
-                    <option value="LEAD">Lead</option>
-                    <option value="INACTIVE">Inactive</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Account Manager</label>
+                  <label className="form-label">Account Manager / Agent</label>
                   <select
                     className="form-select"
                     value={agentId}
                     onChange={(e) => setAgentId(e.target.value)}
-                    disabled={currentProfile?.role !== 'ADMIN'}
-                    style={{
-                      background: currentProfile?.role !== 'ADMIN' ? 'var(--bg-secondary)' : undefined,
-                      cursor: currentProfile?.role !== 'ADMIN' ? 'not-allowed' : undefined,
-                    }}
+                    style={{ fontSize: 13 }}
                   >
                     <option value="">Unassigned</option>
                     {profiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
+                      <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
                     ))}
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Industry</label>
+                  <label className="form-label">Client Status</label>
+                  <select
+                    className="form-select"
+                    value={clientStatus}
+                    onChange={(e) => setClientStatus(e.target.value)}
+                    style={{ fontSize: 13 }}
+                  >
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="VIP">VIP</option>
+                    <option value="LEAD">LEAD</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Retainer Billing Cycle</label>
+                  <select
+                    className="form-select"
+                    value={billingCycle}
+                    onChange={(e) => setBillingCycle(e.target.value)}
+                    style={{ fontSize: 13 }}
+                  >
+                    <option value="NONE">None / Ad-hoc</option>
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="QUARTERLY">Quarterly</option>
+                    <option value="YEARLY">Yearly</option>
+                    <option value="ONE_TIME">One-Time</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Retainer Amount (SAR)</label>
                   <input
+                    type="number"
                     className="form-input"
-                    placeholder="e.g. Real Estate, Medical"
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
+                    value={billingAmount}
+                    onChange={(e) => setBillingAmount(Number(e.target.value) || 0)}
+                    placeholder="0.00"
+                    style={{ fontSize: 13 }}
                   />
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Retainer Retrospective</span>
-                  
-                  <div className="rg-2" style={{ gap: 10 }}>
-                    <div className="form-group">
-                      <label className="form-label">Billing Cycle</label>
-                      <select className="form-select" value={billingCycle} onChange={(e) => setBillingCycle(e.target.value)}>
-                        <option value="NONE">None</option>
-                        <option value="MONTHLY">Monthly</option>
-                        <option value="ONE_TIME">One-Time</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Amount (SAR)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        className="form-input"
-                        value={billingAmount === 0 ? '' : billingAmount}
-                        onChange={(e) => setBillingAmount(parseFloat(e.target.value) || 0)}
-                        style={{ textAlign: 'right' }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rg-2" style={{ gap: 10 }}>
-                    <div className="form-group">
-                      <label className="form-label">Contract Start</label>
-                      <input
-                        type="date"
-                        className="form-input"
-                        value={contractStartDate}
-                        onChange={(e) => setContractStartDate(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Contract End</label>
-                      <input
-                        type="date"
-                        className="form-input"
-                        value={contractEndDate}
-                        onChange={(e) => setContractEndDate(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Contract Start Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={contractStartDate}
+                    onChange={(e) => setContractStartDate(e.target.value)}
+                    style={{ fontSize: 13 }}
+                  />
                 </div>
 
-              </div>
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Contract End Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={contractEndDate}
+                    onChange={(e) => setContractEndDate(e.target.value)}
+                    style={{ fontSize: 13 }}
+                  />
+                </div>
 
-            {/* Client Deliverables Directory */}
-            <div className="card">
-              <div className="card-header"><span className="text-section-header">Client Deliverables Directory</span></div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                
                 {/* Multiple Websites Structured Manager */}
                 <div className="form-group" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 14 }}>
-                  <label className="form-label" style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}>Websites & URLs</label>
+                  <label className="form-label" style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}>Websites &amp; URLs</label>
                   
                   {websites.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
@@ -1792,8 +2266,14 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                   <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => startEditWebsite(w)} style={{ padding: 2 }}>
                                     <Edit2 size={11} />
                                   </button>
-                                  <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => deleteWebsite(w.id)} style={{ color: 'var(--danger)', padding: 2 }}>
-                                    <X size={12} />
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-icon btn-xs"
+                                    onClick={() => setItemToDelete({ id: w.id, label: w.name, typeName: 'Website Link', onDelete: () => deleteWebsite(w.id) })}
+                                    style={{ color: 'var(--danger)', padding: 2 }}
+                                    title="Delete website"
+                                  >
+                                    <Trash2 size={12} />
                                   </button>
                                 </div>
                               </div>
@@ -1912,8 +2392,14 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                                   <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => startEditReport(r)} style={{ padding: 2 }}>
                                     <Edit2 size={11} />
                                   </button>
-                                  <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => deleteReport(r.id)} style={{ color: 'var(--danger)', padding: 2 }}>
-                                    <X size={12} />
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-icon btn-xs"
+                                    onClick={() => setItemToDelete({ id: r.id, label: `${r.month} ${r.year || '2026'}`, typeName: 'Monthly Report', onDelete: () => deleteReport(r.id) })}
+                                    style={{ color: 'var(--danger)', padding: 2 }}
+                                    title="Delete report"
+                                  >
+                                    <Trash2 size={12} />
                                   </button>
                                 </div>
                               </div>
@@ -1924,41 +2410,39 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                     </div>
                   )}
 
-                  {/* Form to add reports */}
+                  {/* Add New Monthly Report input box with Month + Year selector */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       <select
                         className="form-select"
                         value={newRepMonth}
                         onChange={(e) => setNewRepMonth(e.target.value)}
-                        style={{ fontSize: 12, padding: '4px 8px', height: 28 }}
+                        style={{ fontSize: 12, padding: '4px 8px', height: 30 }}
                       >
                         {MONTHS_LIST.map((m) => (
                           <option key={m} value={m}>{m}</option>
                         ))}
                       </select>
-                      
                       <select
                         className="form-select"
                         value={newRepYear}
                         onChange={(e) => setNewRepYear(e.target.value)}
-                        style={{ fontSize: 12, padding: '4px 8px', height: 28 }}
+                        style={{ fontSize: 12, padding: '4px 8px', height: 30 }}
                       >
                         {['2024', '2025', '2026', '2027', '2028', '2029', '2030'].map((y) => (
                           <option key={y} value={y}>{y}</option>
                         ))}
                       </select>
                     </div>
-                    
                     <div style={{ display: 'flex', gap: 6 }}>
                       <input
                         className="form-input"
-                        placeholder="Drive report URL"
+                        placeholder="Report Drive / PDF Link"
                         value={newRepUrl}
                         onChange={(e) => setNewRepUrl(e.target.value)}
                         style={{ fontSize: 12, padding: '4px 8px', flex: 1 }}
                       />
-                      <button type="button" className="btn btn-outline btn-xs" onClick={addReport} style={{ height: 28 }}>
+                      <button type="button" className="btn btn-outline btn-xs" onClick={addReport} style={{ height: 30 }}>
                         Add
                       </button>
                     </div>
@@ -1967,130 +2451,206 @@ export default function ClientDetailClient({ client, profiles, invoices, quotati
                 </div>
 
                 <div className="form-group">
-                  <div className="flex justify-between items-center">
-                    <label className="form-label">Google Business Profile (GMB)</label>
-                    {gmbUrl && (
-                      <a href={gmbUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1" style={{ fontSize: 11 }}>
-                        Visit <ExternalLink size={10} />
-                      </a>
-                    )}
-                  </div>
+                  <label className="form-label">Google Business Profile (GMB) URL</label>
                   <input
                     className="form-input"
-                    placeholder="GBP search URL or admin panel link"
                     value={gmbUrl}
                     onChange={(e) => setGmbUrl(e.target.value)}
+                    placeholder="https://maps.google.com/..."
                     style={{ fontSize: 13 }}
                   />
                 </div>
 
                 <div className="form-group">
-                  <div className="flex justify-between items-center">
-                    <label className="form-label">Brand Assets Folder</label>
-                    {brandAssetsLink && (
-                      <a href={brandAssetsLink} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1" style={{ fontSize: 11 }}>
-                        Visit <ExternalLink size={10} />
-                      </a>
-                    )}
-                  </div>
+                  <label className="form-label">Brand Assets Drive / Folder Link</label>
                   <input
                     className="form-input"
-                    placeholder="Drive folder for logos/designs"
                     value={brandAssetsLink}
                     onChange={(e) => setBrandAssetsLink(e.target.value)}
+                    placeholder="https://drive.google.com/..."
                     style={{ fontSize: 13 }}
                   />
                 </div>
 
-              </div>
-            </div>
-
-            {/* Social Media Quick Handles */}
-            <div className="card">
-              <div className="card-header"><span className="text-section-header">Social Media Profiles</span></div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                
                 <div className="form-group">
-                  <div className="flex justify-between items-center">
-                    <label className="form-label flex items-center gap-1">
-                      <Facebook size={12} /> Facebook Page
-                    </label>
-                    {facebookUrl && (
-                      <a href={facebookUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline" style={{ fontSize: 11 }}>
-                        Open
-                      </a>
-                    )}
-                  </div>
+                  <label className="form-label flex items-center gap-1">
+                    <Facebook size={12} color="#1877F2" /> Facebook Page URL
+                  </label>
                   <input
                     className="form-input"
-                    placeholder="https://facebook.com/page"
                     value={facebookUrl}
                     onChange={(e) => setFacebookUrl(e.target.value)}
+                    placeholder="https://facebook.com/..."
                     style={{ fontSize: 13 }}
                   />
                 </div>
 
                 <div className="form-group">
-                  <div className="flex justify-between items-center">
-                    <label className="form-label flex items-center gap-1">
-                      <Instagram size={12} /> Instagram Profile
-                    </label>
-                    {instagramUrl && (
-                      <a href={instagramUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline" style={{ fontSize: 11 }}>
-                        Open
-                      </a>
-                    )}
-                  </div>
+                  <label className="form-label flex items-center gap-1">
+                    <Instagram size={12} color="#E4405F" /> Instagram Profile URL
+                  </label>
                   <input
                     className="form-input"
-                    placeholder="https://instagram.com/handle"
                     value={instagramUrl}
                     onChange={(e) => setInstagramUrl(e.target.value)}
+                    placeholder="https://instagram.com/..."
                     style={{ fontSize: 13 }}
                   />
                 </div>
 
                 <div className="form-group">
-                  <div className="flex justify-between items-center">
-                    <label className="form-label flex items-center gap-1">
-                      <Video size={12} /> TikTok Profile
-                    </label>
-                    {tiktokUrl && (
-                      <a href={tiktokUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline" style={{ fontSize: 11 }}>
-                        Open
-                      </a>
-                    )}
-                  </div>
+                  <label className="form-label flex items-center gap-1">
+                    <Video size={12} color="#000" /> TikTok Profile URL
+                  </label>
                   <input
                     className="form-input"
-                    placeholder="https://tiktok.com/@handle"
                     value={tiktokUrl}
                     onChange={(e) => setTiktokUrl(e.target.value)}
+                    placeholder="https://tiktok.com/@..."
                     style={{ fontSize: 13 }}
                   />
                 </div>
-
               </div>
             </div>
 
           </div>
         </div>
-      </div>
 
-      {/* FIXED BOTTOM SAVE BAR (Sticky action bar for both mobile & desktop) */}
-      <div className="fixed-bottom-bar no-print">
-        <div className="flex justify-between items-center" style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
-          <div className="flex items-center gap-3">
+        {/* Sleek, responsive bottom save changes footer */}
+        <div className="no-print client-detail-footer">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {error && <span style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 500 }}>✕ {error}</span>}
             {saveSuccess && <span style={{ color: 'var(--success)', fontSize: 13, fontWeight: 600 }}>✓ Changes saved successfully</span>}
+            {!error && !saveSuccess && <span className="client-detail-footer-text" style={{ color: 'var(--text-secondary)', fontSize: 12 }}>Client profile edits must be saved to persist.</span>}
           </div>
           
-          <button className="btn btn-primary btn-sm" onClick={handleSaveChanges} disabled={saving} style={{ display: 'inline-flex', gap: 6 }}>
+          <button className="btn btn-primary btn-sm" onClick={handleSaveChanges} disabled={saving} style={{ display: 'inline-flex', gap: 6, padding: '6px 20px', fontWeight: 600 }}>
             <Save size={14} />
             {saving ? 'Saving changes...' : 'Save changes'}
           </button>
         </div>
       </div>
+
+      {/* Individual Item Delete Confirmation Popup Modal */}
+      {itemToDelete && (
+        <div className="modal-backdrop" onClick={() => setItemToDelete(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '100%' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--danger)', fontWeight: 700, fontSize: 16 }}>
+                <AlertTriangle size={18} /> Confirm Deletion
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setItemToDelete(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 4px', fontSize: 14, color: 'var(--text-primary)' }}>
+              Are you sure you want to delete this <strong>{itemToDelete.typeName}</strong> ({itemToDelete.label})? This action cannot be undone.
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setItemToDelete(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  const { id, onDelete, typeName } = itemToDelete
+                  setItemToDelete(null)
+                  triggerAnimatedDelete(id, onDelete, typeName)
+                }}
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none', fontWeight: 600, padding: '6px 16px' }}
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Client Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: '100%' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--danger)', fontWeight: 700, fontSize: 16 }}>
+                <AlertTriangle size={18} /> Delete Client Record
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowDeleteModal(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 4px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 14, color: 'var(--text-primary)', padding: '0 4px' }}>
+                Are you sure you want to delete <strong>{client.name}</strong> {client.company ? `(${client.company})` : ''}?
+              </div>
+
+              {/* Structured Warning Callout */}
+              <div style={{
+                background: '#FEF2F2',
+                border: '1px solid #FCA5A5',
+                borderRadius: 8,
+                padding: '14px 16px',
+                margin: '2px 4px',
+                fontSize: 13,
+                color: '#991B1B',
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#7F1D1D' }}>
+                  <AlertTriangle size={15} /> Irreversible Action &amp; Linked Data Removal
+                </div>
+                <div style={{ fontSize: 12, color: '#7F1D1D', marginBottom: 6, lineHeight: 1.4 }}>
+                  Deleting this client will permanently purge all linked records from the database:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3, color: '#991B1B' }}>
+                  <li>Linked <strong>Quotations</strong> &amp; Proposal items</li>
+                  <li>Linked <strong>Invoices</strong> &amp; Payment history</li>
+                  <li>Linked <strong>Technical Tasks</strong> &amp; Work updates</li>
+                  <li>Stored <strong>Asset Credentials</strong> &amp; Logins</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowDeleteModal(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={handleDeleteClient}
+                disabled={deletingClient}
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none', fontWeight: 600, padding: '6px 16px' }}
+              >
+                {deletingClient ? 'Deleting...' : 'Yes, Delete Client'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Toast Notification Feedback */}
+      {toastFeedback && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 9999,
+          background: toastFeedback.type === 'danger' ? '#991B1B' : '#15803D',
+          color: '#fff',
+          padding: '10px 18px',
+          borderRadius: 8,
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+          fontSize: 13,
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <CheckCircle size={16} /> {toastFeedback.message}
+        </div>
+      )}
     </div>
   )
 }
@@ -2112,7 +2672,7 @@ function ClientPagination({
   return (
     <div className="flex justify-between items-center" style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
       <span className="text-meta">
-        Showing {Math.min((currentPage - 1) * pageSize + 1, totalItems)} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
+        Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems}
       </span>
       <div className="flex gap-2">
         <button

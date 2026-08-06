@@ -118,9 +118,11 @@ export default function ResetPasswordPage() {
             marginBottom: 32,
           }}
         >
-          <div className="sidebar-logo-icon" style={{ width: 36, height: 36, fontSize: 16 }}>
-            A
-          </div>
+          <img
+            src="/Adonix X Logo.jpeg"
+            alt="Adonix Logo"
+            style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover' }}
+          />
           <div>
             <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
               Adonix CRM

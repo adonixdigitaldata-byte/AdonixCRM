@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
-import { ArrowLeft, Plus, CheckCircle, Printer, Edit2, Trash2, XCircle, RotateCcw, Send, AlertTriangle, X } from 'lucide-react'
+import { ArrowLeft, Plus, CheckCircle, Printer, Edit2, Trash2, XCircle, RotateCcw, Send, AlertTriangle, X, MapPin, Phone, Globe } from 'lucide-react'
 
 import type { Invoice, Profile, Payment } from '@/types/database'
 
@@ -21,6 +21,42 @@ const STATUS_BADGE: Record<string, string> = {
 }
 
 const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'CARD', 'CHEQUE', 'OTHER']
+
+function renderFormattedText(text: string) {
+  if (!text) return null
+  const lines = text.split('\n')
+  const filteredLines = lines.filter((line, i) => {
+    if (i === 0 && /^terms\s*(?:&|and)?\s*conditions:?$/i.test(line.trim())) return false
+    return true
+  })
+
+  return filteredLines.map((line, index) => {
+    const cleanLine = line.trim()
+    const isHeaderLine = /^(?:\*\*|\*)?(Additional Terms|Terms & Conditions|Payment Terms|Payment Schedule)(?:\*\*|\*)?:?$/i.test(cleanLine)
+    const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+
+    return (
+      <div
+        key={index}
+        style={{
+          minHeight: line === '' ? '0.6em' : undefined,
+          fontWeight: isHeaderLine ? 700 : undefined,
+          color: isHeaderLine ? 'var(--text-primary)' : undefined,
+          marginTop: isHeaderLine ? 10 : undefined,
+          marginBottom: isHeaderLine ? 4 : undefined,
+        }}
+      >
+        {parts.map((part, i) => {
+          if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('*') && part.endsWith('*'))) {
+            const content = part.slice(part.startsWith('**') ? 2 : 1, part.endsWith('**') ? -2 : -1)
+            return <strong key={i} style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{content}</strong>
+          }
+          return part
+        })}
+      </div>
+    )
+  })
+}
 
 export default function InvoiceDetailClient({ invoice: initial, payments: initialPayments, profile }: Props) {
   const router = useRouter()
@@ -337,20 +373,57 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
 
 
       <div className="page-body">
-        {/* Document Banner with Company Logo */}
-        <div className="card doc-banner-card" style={{ padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 900 }}>
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
-            <div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                Adonix {showCr && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>(C.R. 4030138081)</span>}
-              </span>
-              <p className="text-meta">VAT Invoice & Billing Statement</p>
+        {/* Document Banner with Company Logo & Brand Details */}
+        <div className="card doc-banner-card" style={{ padding: '16px 20px', marginBottom: 16, maxWidth: 900, width: '100%', boxSizing: 'border-box' }}>
+          <div className="doc-banner-top" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%' }}>
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
+              <div>
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Adonix {showCr && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>(C.R. 4030138081)</span>}
+                </span>
+                <p className="text-meta" style={{ margin: 0 }}>VAT Invoice &amp; Billing Statement</p>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{invoice.invoice_number}</span>
+              <p className="text-meta" style={{ margin: 0 }}>Currency: {curr}</p>
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{invoice.invoice_number}</span>
-            <p className="text-meta">Currency: {curr}</p>
+
+          {/* Compact Brand Header Sub-bar */}
+          <div className="doc-banner-brand-bar">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <MapPin size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <span>Office #602, Matbouli Plaza, Fayd Al Samaa St, Jeddah, KSA</span>
+              <a
+                href="https://maps.app.goo.gl/vbcPiZJTmJ1hvqbv9"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none', marginLeft: 2 }}
+              >
+                (View Map)
+              </a>
+            </span>
+
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Phone size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span>+966 53 849 8580</span>
+              </span>
+              <span>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Globe size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <a
+                  href="https://adonixdigital.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}
+                >
+                  adonixdigital.com
+                </a>
+              </span>
+            </span>
           </div>
         </div>
 
@@ -463,6 +536,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                 </div>
               </div>
             )}
+
           </div>
 
           {/* Right: Totals + Record Payment + Details + Signature */}
@@ -598,6 +672,31 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
               </div>
             )}
           </div>
+        </div>
+
+        {/* Full-width Terms & Notes below main document grid (Matches Quotations style) */}
+        <div style={{ maxWidth: 900, marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {invoice.terms && (
+            <div className="card card-allow-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+              <div className="card-header"><span className="text-section-header">Terms &amp; Conditions</span></div>
+              <div className="card-body">
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                  {renderFormattedText(invoice.terms)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {invoice.notes && (
+            <div className="card card-allow-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+              <div className="card-header"><span className="text-section-header">Notes &amp; Remarks</span></div>
+              <div className="card-body">
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                  {renderFormattedText(invoice.notes)}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

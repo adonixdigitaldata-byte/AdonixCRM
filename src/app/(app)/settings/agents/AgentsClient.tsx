@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { UserPlus, CheckCircle, XCircle, Clock, Search, ChevronRight } from 'lucide-react'
+import { UserPlus, CheckCircle, XCircle, Clock, Search, ChevronRight, Edit2, Shield, User, Briefcase, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import type { Profile } from '@/types/database'
+import type { Profile, UserRole, EmployeeSpecialization, WorkStatus } from '@/types/database'
 
 interface EnrichedAgent extends Profile {
   last_sign_in_at?: string | null
@@ -23,18 +23,38 @@ interface Props {
   currentUserId: string
 }
 
+const SPECIALIZATIONS: { key: EmployeeSpecialization; label: string }[] = [
+  { key: 'WEBSITE', label: 'Website Development' },
+  { key: 'SOCIAL_MEDIA', label: 'Social Media Management' },
+  { key: 'ADS', label: 'Meta / Google Ads' },
+  { key: 'GMB', label: 'GMB & Local SEO' },
+  { key: 'VIDEO_AI', label: 'AI Video & Content' },
+  { key: 'DESIGN', label: 'Graphic & UI Design' },
+  { key: 'SEO', label: 'Organic SEO' },
+  { key: 'OTHER', label: 'General / Operations' },
+]
+
 export default function AgentsClient({ agents: initialAgents, agentLeadCounts, currentUserId }: Props) {
   const router = useRouter()
   const [agents, setAgents] = useState<EnrichedAgent[]>(initialAgents)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
+  const [inviteRole, setInviteRole] = useState<UserRole>('EMPLOYEE')
+  const [inviteSpecialization, setInviteSpecialization] = useState<EmployeeSpecialization>('WEBSITE')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteError, setInviteError] = useState('')
   const [inviteSuccess, setInviteSuccess] = useState('')
   const [resendingEmails, setResendingEmails] = useState<Set<string>>(new Set())
   const [mounted, setMounted] = useState(false)
   const [search, setSearch] = useState('')
+
+  // Edit Role & Specialization Modal State
+  const [editUser, setEditUser] = useState<EnrichedAgent | null>(null)
+  const [editRole, setEditRole] = useState<UserRole>('EMPLOYEE')
+  const [editSpecialization, setEditSpecialization] = useState<string>('')
+  const [editWorkStatus, setEditWorkStatus] = useState<WorkStatus>('AVAILABLE')
+  const [editLoading, setEditLoading] = useState(false)
 
   const supabase = createClient()
 
@@ -46,7 +66,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
     if (!search.trim()) return agents
     const q = search.toLowerCase()
     return agents.filter(
-      (a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q)
+      (a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || (a.specialization && a.specialization.toLowerCase().includes(q))
     )
   }, [agents, search])
 
@@ -60,12 +80,17 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
     const res = await fetch('/api/agents/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: inviteEmail.trim(), name: inviteName.trim() }),
+      body: JSON.stringify({
+        email: inviteEmail.trim(),
+        name: inviteName.trim(),
+        role: inviteRole,
+        specialization: inviteRole === 'EMPLOYEE' ? inviteSpecialization : null,
+      }),
     })
 
     const data = await res.json()
     if (!res.ok) {
-      setInviteError(data.error ?? 'Failed to invite agent')
+      setInviteError(data.error ?? 'Failed to invite team member')
     } else {
       setInviteSuccess(`Invitation sent to ${inviteEmail}`)
       if (data.userId) {
@@ -73,7 +98,9 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
           id: data.userId,
           name: inviteName.trim(),
           email: inviteEmail.trim(),
-          role: 'AGENT',
+          role: inviteRole,
+          specialization: inviteRole === 'EMPLOYEE' ? inviteSpecialization : null,
+          work_status: 'AVAILABLE',
           is_active: true,
           avatar_url: null,
           total_leads_assigned: 0,
@@ -98,7 +125,42 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
     setInviteLoading(false)
   }
 
-  async function resendInvite(email: string, name: string) {
+  async function handleUpdateRole(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editUser || editLoading) return
+
+    setEditLoading(true)
+    try {
+      const res = await fetch('/api/agents/update-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: editUser.id,
+          role: editRole,
+          specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+          work_status: editWorkStatus,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update user role')
+
+      setAgents(agents.map((a) => a.id === editUser.id ? {
+        ...a,
+        role: editRole,
+        specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+        work_status: editWorkStatus,
+      } : a))
+
+      setEditUser(null)
+    } catch (err: any) {
+      alert(err.message || 'Error updating user role')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  async function resendInvite(email: string, name: string, role?: string, specialization?: string | null) {
     setInviteSuccess('')
     setInviteError('')
     setResendingEmails((prev) => {
@@ -110,7 +172,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
     const res = await fetch('/api/agents/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify({ email, name, role, specialization }),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -134,23 +196,20 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
     setAgents(agents.map((a) => a.id === agentId ? { ...a, is_active: !currentStatus } : a))
   }
 
-  const topByLeads = [...agents].sort((a, b) => b.total_leads_assigned - a.total_leads_assigned)
-  const maxLeads = topByLeads.length > 0 && topByLeads[0].total_leads_assigned > 0 ? topByLeads[0].total_leads_assigned : 1
+  const maxLeads = 1
 
   return (
     <div>
       <div className="page-header flex items-center justify-between flex-wrap gap-3">
         <div style={{ minWidth: 0 }}>
-          <h1 className="text-page-title">Agents &amp; Team</h1>
+          <h1 className="text-page-title">Team &amp; Technical Staff</h1>
           <p className="text-meta" style={{ marginTop: 2 }}>
-            {agents.filter((a) => a.is_active && a.last_sign_in_at).length} active ·{' '}
-            {agents.filter((a) => a.is_active && !a.last_sign_in_at).length} pending invite ·{' '}
-            {agents.length} total members
+            Manage team members, roles (Admins, Account Managers, Technical Employees), and specializations.
           </p>
         </div>
         <button className="btn btn-primary btn-sm" onClick={() => setShowInvite(true)} style={{ flexShrink: 0 }}>
           <UserPlus size={14} />
-          Invite agent
+          Invite Team Member
         </button>
       </div>
 
@@ -181,15 +240,15 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
         {showInvite && (
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
-              <span className="text-section-header">Invite new team member</span>
+              <span className="text-section-header">Invite New Team Member</span>
             </div>
             <div className="card-body">
               <form onSubmit={handleInvite} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div className="form-group" style={{ flex: '1 1 200px' }}>
+                <div className="form-group" style={{ flex: '1 1 180px' }}>
                   <label className="form-label form-label-required">Name</label>
                   <input
                     className="form-input"
-                    placeholder="Agent name"
+                    placeholder="Full name"
                     value={inviteName}
                     onChange={(e) => setInviteName(e.target.value)}
                     required
@@ -200,18 +259,45 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                   <input
                     type="email"
                     className="form-input"
-                    placeholder="agent@adonix.com"
+                    placeholder="name@adonix.com"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     required
                   />
                 </div>
+                <div className="form-group" style={{ flex: '1 1 140px' }}>
+                  <label className="form-label">Role</label>
+                  <select
+                    className="form-select"
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as UserRole)}
+                  >
+                    <option value="ACCOUNT_MANAGER">Account Manager</option>
+                    <option value="AGENT">Sales Agent</option>
+                    <option value="EMPLOYEE">Technical Employee</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+                {inviteRole === 'EMPLOYEE' && (
+                  <div className="form-group" style={{ flex: '1 1 180px' }}>
+                    <label className="form-label">Department / Specialization</label>
+                    <select
+                      className="form-select"
+                      value={inviteSpecialization}
+                      onChange={(e) => setInviteSpecialization(e.target.value as EmployeeSpecialization)}
+                    >
+                      {SPECIALIZATIONS.map((s) => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-2" style={{ paddingBottom: 1 }}>
                   <button type="button" className="btn btn-outline" onClick={() => setShowInvite(false)}>
                     Cancel
                   </button>
                   <button type="submit" className="btn btn-primary" disabled={inviteLoading}>
-                    {inviteLoading ? 'Sending...' : 'Send invitation'}
+                    {inviteLoading ? 'Sending...' : 'Send Invitation'}
                   </button>
                 </div>
               </form>
@@ -227,7 +313,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
           }} />
           <input
             className="form-input"
-            placeholder="Search agents by name or email..."
+            placeholder="Search team members by name, email, or specialization..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ paddingLeft: 34 }}
@@ -238,34 +324,25 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
           <table className="table" style={{ minWidth: 880 }}>
             <thead>
               <tr>
-                <th style={{ width: '22%' }}>Agent</th>
-                <th style={{ width: '8%' }}>Role</th>
-                <th style={{ width: '12%' }}>Status</th>
-                <th style={{ width: '14%' }}>Last active</th>
-                <th className="num" style={{ width: '9%' }}>Leads</th>
-                <th className="num" style={{ width: '7%' }}>Won</th>
-                <th className="num" style={{ width: '8%' }}>Conv. %</th>
-                <th className="num" style={{ width: '10%' }}>Quotes/Invoices</th>
-                <th style={{ width: '10%' }}>Performance</th>
+                <th style={{ width: '25%' }}>Team Member</th>
+                <th style={{ width: '12%' }}>Role</th>
+                <th style={{ width: '18%' }}>Specialization</th>
+                <th style={{ width: '12%' }}>Work Status</th>
+                <th style={{ width: '12%' }}>Account Status</th>
+                <th style={{ width: '11%' }}>Last Active</th>
                 <th style={{ width: '10%', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredAgents.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '32px 16px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '32px 16px' }}>
                     {search ? `No team members match "${search}"` : 'No team members found'}
                   </td>
                 </tr>
               ) : (
                 filteredAgents.map((agent) => {
                   const isPending = !agent.last_sign_in_at
-                  const totalLeads = agent.total_leads_assigned ?? 0
-                  const wonLeads = agent.wonLeads ?? 0
-                  const convRate = agent.conversionRate ?? 0
-                  const quoteCount = agent.quotationCount ?? 0
-                  const invCount = agent.invoiceCount ?? 0
-                  const perfPct = maxLeads > 0 ? (totalLeads / maxLeads) * 100 : 0
 
                   return (
                     <tr
@@ -276,11 +353,11 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                     >
                       <td>
                         <div className="flex items-center gap-2">
-                          <div className="avatar avatar-sm">
+                          <div className="avatar avatar-sm" style={{ background: 'var(--accent)', color: '#fff', fontWeight: 700 }}>
                             {agent.name.slice(0, 2).toUpperCase()}
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 500, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                               {agent.name}
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
@@ -289,83 +366,103 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                           </div>
                         </div>
                       </td>
+
+                      {/* Role Pill */}
                       <td>
                         <span className="badge" style={{
-                          background: agent.role === 'ADMIN' ? '#eff6ff' : '#f4f4f5',
-                          color: agent.role === 'ADMIN' ? '#2563eb' : '#52525b',
+                          background: agent.role === 'ADMIN' ? '#EFF6FF' : agent.role === 'ACCOUNT_MANAGER' ? '#F3E8FF' : agent.role === 'AGENT' ? '#DCFCE7' : '#F4F4F5',
+                          color: agent.role === 'ADMIN' ? '#2563EB' : agent.role === 'ACCOUNT_MANAGER' ? '#7E22CE' : agent.role === 'AGENT' ? '#15803D' : '#52525B',
                           fontSize: 11, fontWeight: 600, border: '1px solid var(--border)',
                         }}>
-                          {agent.role}
+                          {agent.role === 'ADMIN' ? 'Admin' : agent.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : agent.role === 'AGENT' ? 'Sales Agent' : 'Employee'}
                         </span>
                       </td>
+
+                      {/* Specialization */}
+                      <td>
+                        {agent.specialization ? (
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>
+                            {SPECIALIZATIONS.find((s) => s.key === agent.specialization)?.label || agent.specialization}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>General</span>
+                        )}
+                      </td>
+
+                      {/* Work Status */}
+                      <td>
+                        <span style={{
+                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12,
+                          background: agent.work_status === 'BUSY' ? '#FEF3C7' : agent.work_status === 'ON_LEAVE' ? '#FEE2E2' : '#DCFCE7',
+                          color: agent.work_status === 'BUSY' ? '#D97706' : agent.work_status === 'ON_LEAVE' ? '#B91C1C' : '#15803D',
+                        }}>
+                          ● {agent.work_status || 'AVAILABLE'}
+                        </span>
+                      </td>
+
+                      {/* Account Status */}
                       <td>
                         {!agent.is_active ? (
                           <span className="badge badge-danger">
-                            <span className="badge-dot" style={{ background: 'var(--danger)' }} />
                             Inactive
                           </span>
                         ) : isPending ? (
-                          <span className="badge badge-warning" title="Agent hasn't logged in yet">
-                            <Clock size={11} />
+                          <span className="badge badge-warning" title="Team member hasn't logged in yet">
                             Invite pending
                           </span>
                         ) : (
                           <span className="badge badge-success">
-                            <span className="badge-dot" style={{ background: 'var(--success)' }} />
                             Active
                           </span>
                         )}
                       </td>
+
+                      {/* Last Active */}
                       <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                         {!mounted ? (
                           <span style={{ color: 'var(--text-tertiary)' }}>—</span>
-                        ) : agent.last_sign_in_at && agent.last_seen_at ? (
+                        ) : agent.last_seen_at ? (
                           formatDistanceToNow(new Date(agent.last_seen_at), { addSuffix: true })
                         ) : (
-                          <span style={{ color: 'var(--text-tertiary)' }}>Never logged in</span>
+                          <span style={{ color: 'var(--text-tertiary)' }}>Never</span>
                         )}
                       </td>
-                      <td className="num tabular-nums" style={{ fontWeight: totalLeads > 0 ? 600 : 400 }}>{totalLeads}</td>
-                      <td className="num tabular-nums" style={{ color: wonLeads > 0 ? 'var(--success)' : 'var(--text-secondary)', fontWeight: wonLeads > 0 ? 600 : 400 }}>
-                        {wonLeads}
-                      </td>
-                      <td className="num tabular-nums">
-                        <span style={{
-                          fontWeight: 600,
-                          color: convRate >= 20 ? 'var(--success)' : convRate >= 10 ? '#d97706' : 'var(--text-secondary)',
-                        }}>
-                          {convRate.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="num tabular-nums" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {quoteCount} / {invCount}
-                      </td>
-                      <td>
-                        <div style={{ height: 5, background: 'var(--border)', borderRadius: 100, overflow: 'hidden' }}>
-                          <div style={{
-                            width: `${perfPct}%`, height: '100%', borderRadius: 100,
-                            background: perfPct > 66 ? 'var(--success)' : perfPct > 33 ? '#d97706' : 'var(--accent)',
-                            transition: 'width 600ms ease',
-                          }} />
-                        </div>
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
+
+                      {/* Actions */}
+                      <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
-                          {agent.is_active && (
-                            <button
-                              className="btn btn-outline btn-xs"
-                              onClick={() => resendInvite(agent.email, agent.name)}
-                              disabled={resendingEmails.has(agent.email)}
-                              style={{ padding: '2px 8px' }}
-                              title="Send password setup or reset link to agent email"
-                            >
-                              {resendingEmails.has(agent.email) ? 'Sending...' : 'Reset link'}
-                            </button>
-                          )}
+                          <button
+                            className="btn btn-outline btn-xs"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              resendInvite(agent.email, agent.name, agent.role, agent.specialization)
+                            }}
+                            disabled={resendingEmails.has(agent.email)}
+                            title="Send password setup or reset link to email"
+                          >
+                            {resendingEmails.has(agent.email) ? 'Sending...' : 'Reset Link'}
+                          </button>
+                          <button
+                            className="btn btn-outline btn-xs"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditUser(agent)
+                              setEditRole(agent.role)
+                              setEditSpecialization(agent.specialization || 'WEBSITE')
+                              setEditWorkStatus(agent.work_status || 'AVAILABLE')
+                            }}
+                            title="Edit Role & Specialization"
+                          >
+                            <Edit2 size={12} />
+                            Role
+                          </button>
                           <button
                             className="btn btn-ghost btn-xs"
-                            onClick={() => toggleActive(agent.id, agent.is_active)}
-                            style={{ color: agent.is_active ? 'var(--danger)' : 'var(--success)', padding: '2px 6px' }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleActive(agent.id, agent.is_active)
+                            }}
+                            style={{ color: agent.is_active ? 'var(--danger)' : 'var(--success)' }}
                           >
                             {agent.is_active ? 'Deactivate' : 'Activate'}
                           </button>
@@ -380,6 +477,73 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
           </table>
         </div>
       </div>
+
+      {/* EDIT ROLE & SPECIALIZATION MODAL */}
+      {editUser && (
+        <div className="modal-backdrop" onClick={() => setEditUser(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <span className="text-section-header">Edit Role &amp; Specialization for {editUser.name}</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditUser(null)}>
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateRole}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label form-label-required">Select Role</label>
+                  <select
+                    className="form-select"
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserRole)}
+                  >
+                    <option value="ACCOUNT_MANAGER">Account Manager</option>
+                    <option value="AGENT">Sales Agent</option>
+                    <option value="EMPLOYEE">Technical Employee</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+
+                {editRole === 'EMPLOYEE' && (
+                  <div className="form-group">
+                    <label className="form-label">Department / Technical Specialization</label>
+                    <select
+                      className="form-select"
+                      value={editSpecialization}
+                      onChange={(e) => setEditSpecialization(e.target.value)}
+                    >
+                      {SPECIALIZATIONS.map((s) => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Work Availability Status</label>
+                  <select
+                    className="form-select"
+                    value={editWorkStatus}
+                    onChange={(e) => setEditWorkStatus(e.target.value as WorkStatus)}
+                  >
+                    <option value="AVAILABLE">Available</option>
+                    <option value="BUSY">Busy</option>
+                    <option value="ON_LEAVE">On Leave</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditUser(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary btn-sm" disabled={editLoading}>
+                  {editLoading ? 'Saving...' : 'Save Role Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

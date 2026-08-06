@@ -17,6 +17,8 @@ import {
   Upload,
   Menu,
   X,
+  CheckSquare,
+  UserCheck,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -30,10 +32,11 @@ const adminNav = [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/leads', label: 'Leads', icon: Users },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
+      { href: '/tasks', label: 'Tasks & Operations', icon: CheckSquare },
     ],
   },
   {
-    section: 'Finance',
+    section: 'Finance & Clients',
     items: [
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
@@ -43,8 +46,28 @@ const adminNav = [
   {
     section: 'Management',
     items: [
-      // { href: '/settings/agents', label: 'Agents', icon: Users },
+      { href: '/settings/agents', label: 'Team & Staff', icon: UserCheck },
       { href: '/settings/import', label: 'Import leads', icon: Upload },
+    ],
+  },
+]
+
+const accountManagerNav = [
+  {
+    section: 'Overview',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/leads', label: 'Leads', icon: Users },
+      { href: '/tasks', label: 'Tasks & Operations', icon: CheckSquare },
+      { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
+    ],
+  },
+  {
+    section: 'Finance & Clients',
+    items: [
+      { href: '/quotations', label: 'Quotations', icon: FileText },
+      { href: '/invoices', label: 'Invoices', icon: Receipt },
+      { href: '/clients', label: 'Clients', icon: Building2 },
     ],
   },
 ]
@@ -55,11 +78,12 @@ const agentNav = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/leads', label: 'My leads', icon: Users },
+      { href: '/tasks', label: 'Tasks & Operations', icon: CheckSquare },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
     ],
   },
   {
-    section: 'Finance',
+    section: 'Finance & Clients',
     items: [
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
@@ -68,11 +92,28 @@ const agentNav = [
   },
 ]
 
+const employeeNav = [
+  {
+    section: 'My Workspace',
+    items: [
+      { href: '/tasks?tab=MY', label: 'My Tasks', icon: CheckSquare },
+      { href: '/clients', label: 'Assigned Clients', icon: Building2 },
+    ],
+  },
+]
+
 export default function Sidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const nav = profile.role === 'ADMIN' ? adminNav : agentNav
+  const nav =
+    profile.role === 'ADMIN'
+      ? adminNav
+      : profile.role === 'ACCOUNT_MANAGER'
+      ? accountManagerNav
+      : profile.role === 'EMPLOYEE'
+      ? employeeNav
+      : agentNav
 
   // Close drawer on route change
   useEffect(() => {
@@ -113,8 +154,13 @@ export default function Sidebar({ profile }: SidebarProps) {
       {/* Mobile-only top header bar */}
       <div className="mobile-header">
         <Link href="/dashboard" className="sidebar-logo" onClick={() => setMobileOpen(false)}>
-          <span className="sidebar-logo-icon">A</span>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>Adonix</span>
+          <img
+            src="/Adonix X Logo.jpeg"
+            alt="Adonix Logo"
+            suppressHydrationWarning
+            style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }}
+          />
+          <span style={{ fontSize: 15, fontWeight: 600 }}>Adonix CRM</span>
         </Link>
         <button
           type="button"
@@ -139,7 +185,12 @@ export default function Sidebar({ profile }: SidebarProps) {
         {/* Sidebar logo header */}
         <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Link href="/dashboard" className="sidebar-logo" onClick={() => setMobileOpen(false)}>
-            <span className="sidebar-logo-icon">A</span>
+            <img
+              src="/Adonix X Logo.jpeg"
+              alt="Adonix Logo"
+              suppressHydrationWarning
+              style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }}
+            />
             <span>Adonix CRM</span>
           </Link>
           {/* Close button — only visible on mobile via CSS */}
@@ -202,7 +253,13 @@ export default function Sidebar({ profile }: SidebarProps) {
                 {profile.name}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                {profile.role === 'ADMIN' ? 'Admin' : 'Agent'}
+                {profile.role === 'ADMIN'
+                  ? 'Admin'
+                  : profile.role === 'ACCOUNT_MANAGER'
+                  ? 'Account Manager'
+                  : profile.role === 'AGENT'
+                  ? 'Sales Agent'
+                  : profile.specialization || 'Employee'}
               </div>
             </div>
           </div>

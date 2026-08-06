@@ -6,7 +6,14 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type UserRole = 'ADMIN' | 'AGENT'
+export type UserRole = 'ADMIN' | 'ACCOUNT_MANAGER' | 'AGENT' | 'EMPLOYEE'
+export type EmployeeSpecialization = 'WEBSITE' | 'SOCIAL_MEDIA' | 'ADS' | 'GMB' | 'VIDEO_AI' | 'DESIGN' | 'SEO' | 'OTHER'
+export type WorkStatus = 'AVAILABLE' | 'BUSY' | 'ON_LEAVE'
+export type TaskCategory = 'WEBSITE' | 'SOCIAL_MEDIA' | 'ADS' | 'GMB' | 'VIDEO_AI' | 'DESIGN' | 'SEO' | 'SALES_TASK' | 'FINANCE_TASK' | 'OTHER'
+export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'COMPLETED' | 'BLOCKED'
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+export type TaskUpdateType = 'PROGRESS_NOTE' | 'STATUS_CHANGE' | 'LINK_ADDED' | 'BLOCKER'
+
 export type LeadSource = 'META_ADS' | 'TIKTOK' | 'SNAPCHAT' | 'WHATSAPP' | 'MANUAL' | 'XLSX_IMPORT'
 export type QuotationStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'
 export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'CANCELLED'
@@ -30,6 +37,8 @@ export interface Profile {
   name: string
   email: string
   role: UserRole
+  specialization?: string | null
+  work_status?: WorkStatus
   is_active: boolean
   avatar_url: string | null
   total_leads_assigned: number
@@ -234,6 +243,8 @@ export interface Invoice {
   tax_amount: number
   total: number
   amount_paid: number
+  notes?: string | null
+  terms?: string | null
   pdf_url: string | null
   created_by: string | null
   created_at: string
@@ -251,4 +262,38 @@ export interface Payment {
   reference_note: string | null
   recorded_by: string | null
   created_at: string
+}
+
+export interface ClientTask {
+  id: string
+  client_id: string
+  assigned_employee_id: string | null
+  created_by: string | null
+  title: string
+  description: string | null
+  category: TaskCategory
+  status: TaskStatus
+  priority: TaskPriority
+  due_date: string | null
+  deliverable_link: string | null
+  created_at: string
+  updated_at: string
+  // Joins
+  client?: Client
+  assigned_employee?: Profile
+  creator?: Profile
+  updates?: ClientTaskUpdate[]
+}
+
+export interface ClientTaskUpdate {
+  id: string
+  task_id: string
+  author_id: string | null
+  update_type: TaskUpdateType
+  status_from: TaskStatus | null
+  status_to: TaskStatus | null
+  body: string
+  attachment_url: string | null
+  created_at: string
+  author?: Profile
 }

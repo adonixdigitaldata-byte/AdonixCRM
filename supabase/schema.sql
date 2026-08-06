@@ -10,7 +10,9 @@ create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null,
   email text not null,
-  role text not null check (role in ('ADMIN','AGENT')),
+  role text not null check (role in ('ADMIN','ACCOUNT_MANAGER','AGENT','EMPLOYEE')),
+  specialization text,
+  work_status text not null default 'AVAILABLE' check (work_status in ('AVAILABLE','BUSY','ON_LEAVE')),
   is_active boolean not null default true,
   avatar_url text,
   -- Auto-assign tracking
@@ -267,6 +269,8 @@ create table if not exists invoices (
   tax_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
   amount_paid numeric(12,2) not null default 0,
+  terms text,
+  notes text,
   pdf_url text,
   created_by uuid references profiles(id),
   created_at timestamptz not null default now(),
@@ -548,4 +552,81 @@ alter table clients add column if not exists credentials jsonb not null default 
 alter table clients add column if not exists service_links jsonb not null default '[]'::jsonb;
 alter table clients add column if not exists secondary_contacts jsonb not null default '[]'::jsonb;
 alter table clients add column if not exists notes text;
+
+-- ============================================================
+-- 16. CLIENT TASKS & TECHNICAL DELIVERABLES
+-- ============================================================
+alter table profiles drop constraint if exists profiles_role_check;
+alter table profiles add constraint profiles_role_check check (role in ('ADMIN','ACCOUNT_MANAGER','AGENT','EMPLOYEE'));
+alter table profiles add column if not exists specialization text;
+alter table profiles add column if not exists work_status text not null default 'AVAILABLE';
+
+create table if not exists client_tasks (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid references clients(id) on delete cascade not null,
+  assigned_employee_id uuid references profiles(id) on delete set null,
+  created_by uuid references profiles(id) on delete set null,
+  title text not null,
+  description text,
+  category text not null default 'OTHER' check (category in ('WEBSITE','SOCIAL_MEDIA','ADS','GMB','VIDEO_AI','DESIGN','SEO','SALES_TASK','FINANCE_TASK','OTHER')),
+  status text not null default 'PENDING' check (status in ('PENDING','IN_PROGRESS','UNDER_REVIEW','COMPLETED','BLOCKED')),
+  priority text not null default 'MEDIUM' check (priority in ('LOW','MEDIUM','HIGH','URGENT')),
+  due_date date,
+  deliverable_link text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_client_tasks_client on client_tasks(client_id);
+create index if not exists idx_client_tasks_assigned on client_tasks(assigned_employee_id);
+create index if not exists idx_client_tasks_status on client_tasks(status);
+create index if not exists idx_client_tasks_due on client_tasks(due_date);
+
+create table if not exists client_task_updates (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid references client_tasks(id) on delete cascade not null,
+  author_id uuid references profiles(id) on delete set null,
+  update_type text not null default 'PROGRESS_NOTE' check (update_type in ('PROGRESS_NOTE','STATUS_CHANGE','LINK_ADDED','BLOCKER')),
+  status_from text,
+  status_to text,
+  body text not null,
+  attachment_url text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_task_updates_task on client_task_updates(task_id);
+
+create trigger client_tasks_updated_at before update on client_tasks
+  for each row execute function update_updated_at();
+
+-- RLS Policies for Tasks
+alter table client_tasks enable row level security;
+alter table client_task_updates enable row level security;
+
+create policy "All authenticated read client_tasks" on client_tasks for select using (auth.uid() is not null);
+create policy "Admins and Account Managers full access client_tasks" on client_tasks for all using (
+  is_admin() or exists (select 1 from profiles where id = auth.uid() and role in ('ADMIN', 'ACCOUNT_MANAGER'))
+);
+create policy "Assigned user update client_tasks" on client_tasks for update using (
+  assigned_employee_id = auth.uid()
+);
+
+create policy "All authenticated read task updates" on client_task_updates for select using (auth.uid() is not null);
+create policy "Authenticated insert task updates" on client_task_updates for insert with check (auth.uid() is not null);
+create policy "Authors manage task updates" on client_task_updates for update using (
+  author_id = auth.uid() or is_admin() or exists (select 1 from profiles where id = auth.uid() and role in ('ADMIN', 'ACCOUNT_MANAGER'))
+);
+create policy "Authors manage delete task updates" on client_task_updates for delete using (
+  author_id = auth.uid() or is_admin() or exists (select 1 from profiles where id = auth.uid() and role in ('ADMIN', 'ACCOUNT_MANAGER'))
+);
+
+-- Allow assigned employees to view and update client records
+drop policy if exists "Agents view clients" on clients;
+create policy "Authenticated view clients" on clients for select using (auth.uid() is not null);
+create policy "Assigned employee update clients" on clients for update using (
+  assigned_agent_id = auth.uid() or exists (
+    select 1 from client_tasks where client_id = clients.id and assigned_employee_id = auth.uid()
+  ) or is_admin()
+);
+
 

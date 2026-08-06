@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
-import { ArrowLeft, FileText, Send, CheckCircle, Printer, Edit2, Trash2, AlertTriangle, X } from 'lucide-react'
+import { ArrowLeft, FileText, Send, CheckCircle, Printer, Edit2, Trash2, AlertTriangle, X, MapPin, Phone, Globe } from 'lucide-react'
 import type { Quotation, Profile, QuotationStatus } from '@/types/database'
 import Link from 'next/link'
 
@@ -147,6 +147,8 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
       tax_percent: quotation.tax_percent,
       tax_amount: quotation.tax_amount,
       total: quotation.total,
+      notes: quotation.notes || null,
+      terms: quotation.terms || null,
       created_by: profile.id,
     }).select('id').single()
 
@@ -232,20 +234,57 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
       </div>
 
       <div className="page-body">
-        {/* Document Banner with Company Logo */}
-        <div className="card doc-banner-card" style={{ padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 900 }}>
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
-            <div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                Adonix {showCr && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>(C.R. 4030138081)</span>}
-              </span>
-              <p className="text-meta">Commercial Quotation</p>
+        {/* Document Banner with Company Logo & Brand Details */}
+        <div className="card doc-banner-card" style={{ padding: '16px 20px', marginBottom: 20, maxWidth: 900, width: '100%', boxSizing: 'border-box' }}>
+          <div className="doc-banner-top" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%' }}>
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
+              <div>
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Adonix {showCr && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>(C.R. 4030138081)</span>}
+                </span>
+                <p className="text-meta" style={{ margin: 0 }}>Commercial Quotation</p>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{quotation.quote_number}</span>
+              <p className="text-meta" style={{ margin: 0 }}>Currency: {curr}</p>
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{quotation.quote_number}</span>
-            <p className="text-meta">Currency: {curr}</p>
+
+          {/* Compact Brand Header Sub-bar */}
+          <div className="doc-banner-brand-bar">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <MapPin size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <span>Office #602, Matbouli Plaza, Fayd Al Samaa St, Jeddah, KSA</span>
+              <a
+                href="https://maps.app.goo.gl/vbcPiZJTmJ1hvqbv9"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none', marginLeft: 2 }}
+              >
+                (View Map)
+              </a>
+            </span>
+
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Phone size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span>+966 53 849 8580</span>
+              </span>
+              <span>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Globe size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <a
+                  href="https://adonixdigital.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}
+                >
+                  adonixdigital.com
+                </a>
+              </span>
+            </span>
           </div>
         </div>
 

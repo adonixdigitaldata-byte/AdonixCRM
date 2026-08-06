@@ -2,15 +2,45 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { formatDistanceToNow, format, subDays, isAfter } from 'date-fns'
+import { formatDistanceToNow, format, subDays, isAfter, parseISO } from 'date-fns'
 import {
   ArrowLeft, Users, TrendingUp, CheckCircle, Clock, Target,
   Phone, Mail, Activity, Search, ChevronRight, Award,
   XCircle, AlertCircle, BarChart2, Calendar, MessageSquare,
-  FileText, Receipt, DollarSign, CreditCard, Sparkles,
+  FileText, Receipt, DollarSign, CreditCard, Sparkles, X,
+  Edit2, Trash2, Paperclip, ExternalLink, AlertTriangle,
 } from 'lucide-react'
-import type { Profile, LeadStage } from '@/types/database'
+import type { Profile, LeadStage, TaskCategory, TaskPriority, TaskStatus } from '@/types/database'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+
+const CATEGORY_LABELS: Record<string, { label: string; color: string; icon: string }> = {
+  WEBSITE: { label: 'Website Dev', color: '#0284C7', icon: '🌐' },
+  SOCIAL_MEDIA: { label: 'Social Media', color: '#DB2777', icon: '📱' },
+  ADS: { label: 'Paid Ads', color: '#7C3AED', icon: '🎯' },
+  GMB: { label: 'GMB / SEO', color: '#D97706', icon: '📍' },
+  VIDEO_AI: { label: 'Video / AI', color: '#EA580C', icon: '🎬' },
+  DESIGN: { label: 'Graphic Design', color: '#0F766E', icon: '🎨' },
+  SEO: { label: 'SEO Campaign', color: '#16A34A', icon: '🚀' },
+  SALES_TASK: { label: 'Sales Follow-up', color: '#15803D', icon: '💼' },
+  FINANCE_TASK: { label: 'Quote / Billing', color: '#7E22CE', icon: '📄' },
+  OTHER: { label: 'General Task', color: '#71717A', icon: '📋' },
+}
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  PENDING: { label: 'To Do', bg: '#F4F4F5', text: '#52525B' },
+  IN_PROGRESS: { label: 'In Progress', bg: '#EFF6FF', text: '#1D4ED8' },
+  UNDER_REVIEW: { label: 'Under Review', bg: '#FEF3C7', text: '#D97706' },
+  COMPLETED: { label: 'Completed', bg: '#DCFCE7', text: '#15803D' },
+  BLOCKED: { label: 'Blocked', bg: '#FEE2E2', text: '#B91C1C' },
+}
+
+const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
+  LOW: { label: 'Low', color: '#71717A' },
+  MEDIUM: { label: 'Medium', color: '#0284C7' },
+  HIGH: { label: 'High', color: '#D97706' },
+  URGENT: { label: 'Urgent', color: '#DC2626' },
+}
 
 interface Props {
   agent: Profile & { last_sign_in_at?: string | null }
@@ -21,6 +51,7 @@ interface Props {
   activities: any[]
   quotations: any[]
   invoices: any[]
+  tasks?: any[]
   totalLeads: number
   wonCount: number
   lostCount: number
@@ -72,6 +103,7 @@ export default function AgentDetailClient({
   activities,
   quotations,
   invoices,
+  tasks = [],
   totalLeads,
   wonCount,
   lostCount,
@@ -80,11 +112,202 @@ export default function AgentDetailClient({
   pendingFollowups,
 }: Props) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'leads' | 'followups' | 'quotations' | 'invoices' | 'activity'>('leads')
+  const supabase = createClient()
+  const [currentProfile, setCurrentProfile] = useState<Profile | null>(null)
+
+  useEffect(() => {
+    async function loadProfile() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+        setCurrentProfile(data)
+      }
+    }
+    loadProfile()
+  }, [])
+
+  const [activeTab, setActiveTab] = useState<'leads' | 'tasks' | 'followups' | 'quotations' | 'invoices' | 'activity'>(
+    agent.role === 'EMPLOYEE' ? 'tasks' : 'leads'
+  )
   const [leadSearch, setLeadSearch] = useState('')
+  const [selectedTask, setSelectedTask] = useState<any | null>(null)
+  const [taskList, setTaskList] = useState<any[]>(tasks)
+
+  useEffect(() => {
+    setTaskList(tasks)
+  }, [tasks])
+
+  // Task post update state
+  const [updateBody, setUpdateBody] = useState('')
+  const [updateLink, setUpdateLink] = useState('')
+  const [updateStatus, setUpdateStatus] = useState<any>('')
+  const [submittingUpdate, setSubmittingUpdate] = useState(false)
+
+  // Task instructions edit state
+  const [isEditingTaskDetails, setIsEditingTaskDetails] = useState(false)
+  const [editTaskDescription, setEditTaskDescription] = useState('')
+  const [editTaskDeliverableLink, setEditTaskDeliverableLink] = useState('')
+  const [savingTaskDetails, setSavingTaskDetails] = useState(false)
+
+  // Work Log edit & delete state
+  const [editingLogId, setEditingLogId] = useState<string | null>(null)
+  const [editingLogBody, setEditingLogBody] = useState('')
+  const [editingLogLink, setEditingLogLink] = useState('')
+  const [savingLog, setSavingLog] = useState(false)
+  const [confirmingDeleteLogId, setConfirmingDeleteLogId] = useState<string | null>(null)
+
+  // Quick Work Status Toggle state
+  const [workStatus, setWorkStatus] = useState(agent.work_status || 'AVAILABLE')
+  const [updatingWorkStatus, setUpdatingWorkStatus] = useState(false)
+
+  async function handleWorkStatusChange(newStatus: any) {
+    setWorkStatus(newStatus)
+    setUpdatingWorkStatus(true)
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ work_status: newStatus })
+        .eq('id', agent.id)
+
+      if (error) throw error
+    } catch (err: any) {
+      alert(err.message || 'Failed to update work status')
+    } finally {
+      setUpdatingWorkStatus(false)
+    }
+  }
+
+  async function handleSaveTaskDetails() {
+    if (!selectedTask || savingTaskDetails) return
+    setSavingTaskDetails(true)
+    try {
+      const { error } = await supabase
+        .from('client_tasks')
+        .update({
+          description: editTaskDescription.trim() || null,
+          deliverable_link: editTaskDeliverableLink.trim() || null,
+        })
+        .eq('id', selectedTask.id)
+
+      if (error) throw error
+
+      const updatedTask = {
+        ...selectedTask,
+        description: editTaskDescription.trim() || null,
+        deliverable_link: editTaskDeliverableLink.trim() || null,
+      }
+
+      setSelectedTask(updatedTask)
+      setTaskList((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)))
+      setIsEditingTaskDetails(false)
+    } catch (err: any) {
+      alert(err.message || 'Failed to update task instructions')
+    } finally {
+      setSavingTaskDetails(false)
+    }
+  }
+
+  async function handlePostDailyUpdate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedTask || !updateBody.trim() || submittingUpdate) return
+
+    setSubmittingUpdate(true)
+    try {
+      const { data: updateData, error: updateError } = await supabase
+        .from('client_task_updates')
+        .insert({
+          task_id: selectedTask.id,
+          author_id: currentProfile?.id || null,
+          body: updateBody.trim(),
+          attachment_url: updateLink.trim() || null,
+        })
+        .select(`*, author:profiles!author_id(id, name)`)
+        .single()
+
+      if (updateError) throw updateError
+
+      let newStatus = selectedTask.status
+      if (updateStatus && updateStatus !== selectedTask.status) {
+        newStatus = updateStatus
+        await supabase
+          .from('client_tasks')
+          .update({ status: updateStatus, updated_at: new Date().toISOString() })
+          .eq('id', selectedTask.id)
+      }
+
+      const updatedTask = {
+        ...selectedTask,
+        status: newStatus,
+        updates: [updateData, ...(selectedTask.updates || [])],
+      }
+
+      setSelectedTask(updatedTask)
+      setTaskList((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)))
+
+      setUpdateBody('')
+      setUpdateLink('')
+      setUpdateStatus('')
+    } catch (err: any) {
+      alert(err.message || 'Failed to post work update')
+    } finally {
+      setSubmittingUpdate(false)
+    }
+  }
+
+  async function handleSaveLogEdit(logId: string) {
+    if (!editingLogBody.trim() || savingLog) return
+    setSavingLog(true)
+    try {
+      const { error } = await supabase
+        .from('client_task_updates')
+        .update({
+          body: editingLogBody.trim(),
+          attachment_url: editingLogLink.trim() || null,
+        })
+        .eq('id', logId)
+
+      if (error) throw error
+
+      if (selectedTask) {
+        const updatedLogs = selectedTask.updates.map((u: any) =>
+          u.id === logId ? { ...u, body: editingLogBody.trim(), attachment_url: editingLogLink.trim() || null } : u
+        )
+        const updatedTask = { ...selectedTask, updates: updatedLogs }
+        setSelectedTask(updatedTask)
+        setTaskList((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)))
+      }
+      setEditingLogId(null)
+    } catch (err: any) {
+      alert(err.message || 'Failed to edit work log')
+    } finally {
+      setSavingLog(false)
+    }
+  }
+
+  async function confirmDeleteLog(logId: string) {
+    try {
+      const { error } = await supabase
+        .from('client_task_updates')
+        .delete()
+        .eq('id', logId)
+
+      if (error) throw error
+
+      if (selectedTask) {
+        const updatedLogs = selectedTask.updates.filter((u: any) => u.id !== logId)
+        const updatedTask = { ...selectedTask, updates: updatedLogs }
+        setSelectedTask(updatedTask)
+        setTaskList((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)))
+      }
+      setConfirmingDeleteLogId(null)
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete work log')
+    }
+  }
 
   // Pagination states
   const [leadsPage, setLeadsPage] = useState(1)
+  const [tasksPage, setTasksPage] = useState(1)
   const [followupsPage, setFollowupsPage] = useState(1)
   const [quotesPage, setQuotesPage] = useState(1)
   const [invoicesPage, setInvoicesPage] = useState(1)
@@ -94,6 +317,7 @@ export default function AgentDetailClient({
   // Reset page numbers when tab changes
   useEffect(() => {
     setLeadsPage(1)
+    setTasksPage(1)
     setFollowupsPage(1)
     setQuotesPage(1)
     setInvoicesPage(1)
@@ -138,6 +362,12 @@ export default function AgentDetailClient({
     )
   }, [leads, leadSearch])
 
+  // Paginated Tasks
+  const paginatedTasks = useMemo(() => {
+    const start = (tasksPage - 1) * PAGE_SIZE
+    return taskList.slice(start, start + PAGE_SIZE)
+  }, [taskList, tasksPage, PAGE_SIZE])
+
   const [resendingReset, setResendingReset] = useState(false)
   const [resetMsg, setResetMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
@@ -148,7 +378,12 @@ export default function AgentDetailClient({
       const res = await fetch('/api/agents/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: agent.email, name: agent.name }),
+        body: JSON.stringify({
+          email: agent.email,
+          name: agent.name,
+          role: agent.role,
+          specialization: agent.specialization,
+        }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -204,10 +439,12 @@ export default function AgentDetailClient({
             <Mail size={14} />
             {resendingReset ? 'Sending link...' : 'Send reset password link'}
           </button>
-          <Link href="/leads?action=add" className="btn btn-primary btn-sm">
-            <Users size={14} />
-            Assign new lead
-          </Link>
+          {agent.role !== 'EMPLOYEE' && (
+            <Link href="/leads?action=add" className="btn btn-primary btn-sm">
+              <Users size={14} />
+              Assign new lead
+            </Link>
+          )}
         </div>
       </div>
 
@@ -257,11 +494,11 @@ export default function AgentDetailClient({
                       {agent.name}
                     </span>
                     <span className="badge" style={{
-                      background: agent.role === 'ADMIN' ? '#eff6ff' : '#f4f4f5',
-                      color: agent.role === 'ADMIN' ? '#2563eb' : '#52525b',
+                      background: agent.role === 'ADMIN' ? '#EFF6FF' : agent.role === 'ACCOUNT_MANAGER' ? '#F3E8FF' : agent.role === 'AGENT' ? '#DCFCE7' : '#F4F4F5',
+                      color: agent.role === 'ADMIN' ? '#2563EB' : agent.role === 'ACCOUNT_MANAGER' ? '#7E22CE' : agent.role === 'AGENT' ? '#15803D' : '#52525B',
                       fontSize: 11, fontWeight: 600, border: '1px solid var(--border)',
                     }}>
-                      {agent.role}
+                      {agent.role === 'ADMIN' ? 'Admin' : agent.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : agent.role === 'AGENT' ? 'Sales Agent' : agent.specialization ? `${agent.specialization} Specialist` : 'Technical Employee'}
                     </span>
                     {isActive ? (
                       <span className="badge badge-success" style={{ fontSize: 11 }}>
@@ -276,158 +513,365 @@ export default function AgentDetailClient({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 flex-wrap text-meta" style={{ fontSize: 12 }}>
-                    <span className="flex items-center gap-1" style={{ wordBreak: 'break-all' }}>
-                      <Mail size={12} style={{ flexShrink: 0 }} /> {agent.email}
-                    </span>
-                    <span>Joined {formatDistanceToNow(new Date(agent.created_at), { addSuffix: true })}</span>
-                    {agent.last_seen_at && (
-                      <span className="flex items-center gap-1">
-                        <Clock size={12} style={{ flexShrink: 0 }} />
-                        Active {formatDistanceToNow(new Date(agent.last_seen_at), { addSuffix: true })}
-                      </span>
-                    )}
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, wordBreak: 'break-all', color: 'var(--text-secondary)' }}>
+                      <Mail size={13} style={{ flexShrink: 0, color: 'var(--text-tertiary)' }} />
+                      <span>{agent.email}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 16, rowGap: 4, flexWrap: 'wrap', color: 'var(--text-secondary)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Calendar size={13} style={{ flexShrink: 0, color: 'var(--text-tertiary)' }} />
+                        <span>Joined {formatDistanceToNow(new Date(agent.created_at), { addSuffix: true })}</span>
+                      </div>
+                      {agent.last_seen_at && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Clock size={13} style={{ flexShrink: 0, color: 'var(--text-tertiary)' }} />
+                          <span>Active {formatDistanceToNow(new Date(agent.last_seen_at), { addSuffix: true })}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Right Performance Banner Widget */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 16,
-                padding: '12px 18px',
-                background: 'var(--bg)',
-                borderRadius: 'var(--radius)',
-                border: '1px solid var(--border)',
-              }}>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Status &amp; Rating
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Sparkles size={14} style={{ color: perfTag.color }} />
-                    {perfTag.label}
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Conversion
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: conversionRate >= 20 ? 'var(--success)' : 'var(--text-primary)', marginTop: 2 }}>
-                    {conversionRate.toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Responsive KPI Metric Row (SAR Normalized) */}
-        <div className="rg-4 mb-6">
-          <div className="stat-card">
-            <div className="stat-card-label">Total leads</div>
-            <div className="stat-card-value">{totalLeads}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-              {recentLeads} added in last 30 days
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-card-label">Won deals</div>
-            <div className="stat-card-value" style={{ color: 'var(--success)' }}>{wonCount}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-              {lostCount} lost deals
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-card-label">Quotations (SAR Base)</div>
-            <div className="stat-card-value" style={{ color: '#2563eb', fontSize: 18 }}>
-              SAR {totalQuotedSAR.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-              {quotations.length} quotes created (currency converted)
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-card-label">Invoiced (SAR Base)</div>
-            <div className="stat-card-value" style={{ color: 'var(--success)', fontSize: 18 }}>
-              SAR {totalInvoicedSAR.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-              SAR {totalCollectedSAR.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} collected
-            </div>
-          </div>
-        </div>
-
-        {/* Stage distribution funnel */}
-        <div className="card mb-6">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <BarChart2 size={15} style={{ color: 'var(--text-secondary)' }} />
-              <span className="text-section-header">Lead funnel distribution</span>
-            </div>
-            <span className="text-meta">{totalLeads} assigned leads</span>
-          </div>
-          <div className="card-body">
-            {stages.length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center', padding: 24 }}>No stage data</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {stages.map((stage) => {
-                  const count = stageCounts[stage.id] ?? 0
-                  const pct = totalLeads > 0 ? (count / totalLeads) * 100 : 0
-                  return (
-                    <div key={stage.id} className="flex items-center gap-3">
-                      <span style={{ width: 110, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', flexShrink: 0 }}>
-                        {stage.label}
-                      </span>
-                      <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 100, overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: stage.color_hex, borderRadius: 100, transition: 'width 600ms ease' }} />
-                      </div>
-                      <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 600, width: 28, textAlign: 'right', color: count > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', flexShrink: 0 }}>
-                        {count}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', width: 38, textAlign: 'right', flexShrink: 0 }}>
-                        {pct.toFixed(0)}%
-                      </span>
+              {agent.role === 'EMPLOYEE' ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  padding: '12px 18px',
+                  background: 'var(--bg)',
+                  borderRadius: 'var(--radius)',
+                  border: '1px solid var(--border)',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
+                      Work Availability
                     </div>
-                  )
-                })}
-              </div>
-            )}
+                    {(currentProfile?.id === agent.id || currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') ? (
+                      <select
+                        className="form-select"
+                        value={workStatus}
+                        onChange={(e) => handleWorkStatusChange(e.target.value)}
+                        disabled={updatingWorkStatus}
+                        style={{
+                          padding: '3px 8px', fontSize: 12, fontWeight: 700,
+                          background: workStatus === 'BUSY' ? '#FEF3C7' : workStatus === 'ON_LEAVE' ? '#FEE2E2' : '#DCFCE7',
+                          color: workStatus === 'BUSY' ? '#D97706' : workStatus === 'ON_LEAVE' ? '#B91C1C' : '#15803D',
+                          border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer',
+                        }}
+                      >
+                        <option value="AVAILABLE">● AVAILABLE</option>
+                        <option value="BUSY">● BUSY</option>
+                        <option value="ON_LEAVE">● ON LEAVE</option>
+                      </select>
+                    ) : (
+                      <div style={{
+                        fontSize: 12, fontWeight: 700, padding: '3px 8px', borderRadius: 4, display: 'inline-block',
+                        background: workStatus === 'BUSY' ? '#FEF3C7' : workStatus === 'ON_LEAVE' ? '#FEE2E2' : '#DCFCE7',
+                        color: workStatus === 'BUSY' ? '#D97706' : workStatus === 'ON_LEAVE' ? '#B91C1C' : '#15803D',
+                      }}>
+                        ● {workStatus}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Department
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', marginTop: 2 }}>
+                      {agent.specialization || 'Technical'}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  padding: '12px 18px',
+                  background: 'var(--bg)',
+                  borderRadius: 'var(--radius)',
+                  border: '1px solid var(--border)',
+                  flexWrap: 'wrap',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
+                      Work Availability
+                    </div>
+                    {(currentProfile?.id === agent.id || currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') ? (
+                      <select
+                        className="form-select"
+                        value={workStatus}
+                        onChange={(e) => handleWorkStatusChange(e.target.value)}
+                        disabled={updatingWorkStatus}
+                        style={{
+                          padding: '3px 8px', fontSize: 12, fontWeight: 700,
+                          background: workStatus === 'BUSY' ? '#FEF3C7' : workStatus === 'ON_LEAVE' ? '#FEE2E2' : '#DCFCE7',
+                          color: workStatus === 'BUSY' ? '#D97706' : workStatus === 'ON_LEAVE' ? '#B91C1C' : '#15803D',
+                          border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer',
+                        }}
+                      >
+                        <option value="AVAILABLE">● AVAILABLE</option>
+                        <option value="BUSY">● BUSY</option>
+                        <option value="ON_LEAVE">● ON LEAVE</option>
+                      </select>
+                    ) : (
+                      <div style={{
+                        fontSize: 12, fontWeight: 700, padding: '3px 8px', borderRadius: 4, display: 'inline-block',
+                        background: workStatus === 'BUSY' ? '#FEF3C7' : workStatus === 'ON_LEAVE' ? '#FEE2E2' : '#DCFCE7',
+                        color: workStatus === 'BUSY' ? '#D97706' : workStatus === 'ON_LEAVE' ? '#B91C1C' : '#15803D',
+                      }}>
+                        ● {workStatus}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Status &amp; Rating
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Sparkles size={14} style={{ color: perfTag.color }} />
+                      {perfTag.label}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Conversion
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: conversionRate >= 20 ? 'var(--success)' : 'var(--text-primary)', marginTop: 2 }}>
+                      {conversionRate.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Responsive KPI Metric Row */}
+        {agent.role === 'EMPLOYEE' ? (
+          <div className="rg-4 mb-6">
+            <div className="stat-card">
+              <div className="stat-card-label">Total Assigned Tasks</div>
+              <div className="stat-card-value">{tasks.length}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                Technical deliverables &amp; assignments
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-card-label">In Progress</div>
+              <div className="stat-card-value" style={{ color: '#2563EB' }}>
+                {tasks.filter((t: any) => t.status !== 'COMPLETED').length}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                Active tasks under execution
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-card-label">Completed Deliverables</div>
+              <div className="stat-card-value" style={{ color: 'var(--success)' }}>
+                {tasks.filter((t: any) => t.status === 'COMPLETED').length}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                Finished task deliverables
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-card-label">Overdue Tasks</div>
+              <div className="stat-card-value" style={{ color: 'var(--danger)' }}>
+                {tasks.filter((t: any) => t.status !== 'COMPLETED' && t.due_date && t.due_date < format(new Date(), 'yyyy-MM-dd')).length}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                Past target due date
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rg-4 mb-6">
+            <div className="stat-card">
+              <div className="stat-card-label">Total leads</div>
+              <div className="stat-card-value">{totalLeads}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                {recentLeads} added in last 30 days
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-card-label">Won deals</div>
+              <div className="stat-card-value" style={{ color: 'var(--success)' }}>{wonCount}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                {lostCount} lost deals
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-card-label">Quotations (SAR Base)</div>
+              <div className="stat-card-value" style={{ color: '#2563eb', fontSize: 18 }}>
+                SAR {totalQuotedSAR.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                {quotations.length} quotes created
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-card-label">Invoiced (SAR Base)</div>
+              <div className="stat-card-value" style={{ color: 'var(--success)', fontSize: 18 }}>
+                SAR {totalInvoicedSAR.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                SAR {totalCollectedSAR.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} collected
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stage distribution funnel (Only for Sales Agents and Account Managers) */}
+        {agent.role !== 'EMPLOYEE' && (
+          <div className="card mb-6">
+            <div className="card-header">
+              <div className="flex items-center gap-2">
+                <BarChart2 size={15} style={{ color: 'var(--text-secondary)' }} />
+                <span className="text-section-header">Lead funnel distribution</span>
+              </div>
+              <span className="text-meta">{totalLeads} assigned leads</span>
+            </div>
+            <div className="card-body">
+              {stages.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center', padding: 24 }}>No stage data</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {stages.map((stage) => {
+                    const count = stageCounts[stage.id] ?? 0
+                    const pct = totalLeads > 0 ? (count / totalLeads) * 100 : 0
+                    return (
+                      <div key={stage.id} className="flex items-center gap-3">
+                        <span style={{ width: 110, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', flexShrink: 0 }}>
+                          {stage.label}
+                        </span>
+                        <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 100, overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: stage.color_hex, borderRadius: 100, transition: 'width 600ms ease' }} />
+                        </div>
+                        <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 600, width: 28, textAlign: 'right', color: count > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', flexShrink: 0 }}>
+                          {count}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', width: 38, textAlign: 'right', flexShrink: 0 }}>
+                          {pct.toFixed(0)}%
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Tabbed Detailed Data Section */}
         <div className="card">
-          <div className="tabs" style={{ padding: '0 8px', overflowX: 'auto', flexWrap: 'nowrap' }}>
-            {([
-              { key: 'leads', label: 'Leads', count: totalLeads },
-              { key: 'followups', label: 'Follow-ups', count: totalFu },
-              { key: 'quotations', label: 'Quotations', count: quotations.length },
-              { key: 'invoices', label: 'Invoices', count: invoices.length },
-              { key: 'activity', label: 'Activity', count: activities.length },
-            ] as const).map(({ key, label, count }) => (
-              <button
-                key={key}
-                className={`tab ${activeTab === key ? 'active' : ''}`}
-                onClick={() => setActiveTab(key)}
-                style={{ whiteSpace: 'nowrap' }}
-              >
-                {label}
-                <span style={{ marginLeft: 4, fontSize: 11, color: 'var(--text-tertiary)' }}>
-                  {count}
-                </span>
-              </button>
-            ))}
-          </div>
+          {/* Section header or Tabs header */}
+          {agent.role === 'EMPLOYEE' ? (
+            <div className="card-header flex justify-between items-center">
+              <span className="text-section-header">Technical Tasks &amp; Deliverables</span>
+              <span className="badge badge-default">{tasks.length} Total Tasks</span>
+            </div>
+          ) : (
+            <div className="tabs" style={{
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              overflowX: 'auto',
+              whiteSpace: 'nowrap',
+              WebkitOverflowScrolling: 'touch',
+            }}>
+              {[
+                { key: 'leads', label: 'Assigned leads', count: totalLeads },
+                { key: 'tasks', label: 'Assigned Tasks', count: tasks.length },
+                { key: 'followups', label: 'Follow-ups', count: totalFu },
+                { key: 'quotations', label: 'Quotations', count: quotations.length },
+                { key: 'invoices', label: 'Invoices', count: invoices.length },
+                { key: 'activity', label: 'Activity log', count: activities.length },
+              ].map(({ key, label, count }) => (
+                <button
+                  key={key}
+                  className={`tab ${activeTab === key ? 'active' : ''}`}
+                  onClick={() => setActiveTab(key as any)}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {label}
+                  <span style={{ marginLeft: 4, fontSize: 11, color: 'var(--text-tertiary)' }}>
+                    {count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
           <div style={{ padding: '16px' }}>
+
+            {/* TASKS TAB */}
+            {activeTab === 'tasks' && (
+              <div>
+                {taskList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)', fontSize: 13 }}>
+                    No technical tasks assigned to this team member yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="table-wrapper" style={{ border: 'none', borderRadius: 0, margin: -4 }}>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '35%' }}>Task Deliverable</th>
+                            <th style={{ width: '25%' }}>Client</th>
+                            <th style={{ width: '20%' }}>Target Date</th>
+                            <th style={{ width: '20%' }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedTasks.map((t: any) => (
+                            <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTask(t)}>
+                              <td>
+                                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.title}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>Category: {t.category}</div>
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 500, fontSize: 13 }}>{t.client?.name ?? '—'}</div>
+                                {t.client?.company && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t.client.company}</div>}
+                              </td>
+                              <td style={{ fontSize: 13 }}>{t.due_date ?? 'No deadline'}</td>
+                              <td>
+                                <span className="badge" style={{
+                                  background: t.status === 'COMPLETED' ? '#DCFCE7' : t.status === 'IN_PROGRESS' ? '#EFF6FF' : '#F4F4F5',
+                                  color: t.status === 'COMPLETED' ? '#15803D' : t.status === 'IN_PROGRESS' ? '#1D4ED8' : '#52525B',
+                                  fontSize: 11, fontWeight: 600,
+                                }}>
+                                  {t.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <TablePagination
+                      currentPage={tasksPage}
+                      totalItems={taskList.length}
+                      pageSize={PAGE_SIZE}
+                      onPageChange={setTasksPage}
+                    />
+                  </>
+                )}
+              </div>
+            )}
 
             {/* LEADS TAB */}
             {activeTab === 'leads' && (
@@ -811,6 +1255,322 @@ export default function AgentDetailClient({
         </div>
 
       </div>
+
+      {/* FULL FEATURED TASK DETAILS & DAILY LOG DRAWER */}
+      {selectedTask && (
+        <div className="modal-backdrop" onClick={() => setSelectedTask(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+              <div>
+                <span className="text-section-header">{selectedTask.title}</span>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  Client: <strong>{selectedTask.client?.name}</strong> {selectedTask.client?.company ? `(${selectedTask.client.company})` : ''}
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTask(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Task Meta Bar */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: 12, background: 'var(--bg)', borderRadius: 8, fontSize: 13 }}>
+                <div>
+                  <span className="text-meta">Category: </span>
+                  <strong>{CATEGORY_LABELS[selectedTask.category]?.label || selectedTask.category}</strong>
+                </div>
+                <div>
+                  <span className="text-meta">Specialist: </span>
+                  <strong>{selectedTask.assigned_employee?.name ?? 'Unassigned'}</strong>
+                </div>
+                <div>
+                  <span className="text-meta">Due Date: </span>
+                  <strong>{selectedTask.due_date ?? 'No deadline'}</strong>
+                </div>
+                <div>
+                  <span className="text-meta">Priority: </span>
+                  <strong style={{ color: PRIORITY_CONFIG[selectedTask.priority]?.color }}>{selectedTask.priority}</strong>
+                </div>
+              </div>
+
+              {/* TASK REQUIREMENTS & INSTRUCTIONS SECTION */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                    Requirements &amp; Instructions
+                  </span>
+                  {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') && !isEditingTaskDetails && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-xs"
+                      onClick={() => {
+                        setIsEditingTaskDetails(true)
+                        setEditTaskDescription(selectedTask.description || '')
+                        setEditTaskDeliverableLink(selectedTask.deliverable_link || '')
+                      }}
+                    >
+                      <Edit2 size={12} /> Edit Instructions
+                    </button>
+                  )}
+                </div>
+
+                {isEditingTaskDetails ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#F8FAFC', padding: 12, borderRadius: 8, border: '1px solid #CBD5E1' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: 12 }}>Instructions / Guidelines</label>
+                      <textarea
+                        className="form-input"
+                        rows={4}
+                        value={editTaskDescription}
+                        onChange={(e) => setEditTaskDescription(e.target.value)}
+                        placeholder="Enter task guidelines and instructions for the specialist..."
+                        style={{ fontSize: 13 }}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: 12 }}>Deliverable Folder / Link (Optional)</label>
+                      <input
+                        className="form-input"
+                        value={editTaskDeliverableLink}
+                        onChange={(e) => setEditTaskDeliverableLink(e.target.value)}
+                        placeholder="https://drive.google.com/... or Figma link"
+                        style={{ fontSize: 12 }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-xs"
+                        onClick={() => setIsEditingTaskDetails(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-xs"
+                        onClick={handleSaveTaskDetails}
+                        disabled={savingTaskDetails}
+                      >
+                        {savingTaskDetails ? 'Saving...' : 'Save Instructions'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {selectedTask.description ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere', background: '#fff', padding: 10, borderRadius: 6, border: '1px solid var(--border)' }}>
+                        {selectedTask.description}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic', padding: '6px 0' }}>
+                        No instructions provided yet. Click "Edit Instructions" to add guidelines.
+                      </div>
+                    )}
+
+                    {selectedTask.deliverable_link && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                          Deliverable Folder / Link
+                        </div>
+                        <a
+                          href={selectedTask.deliverable_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-outline btn-xs"
+                          style={{ color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <ExternalLink size={12} /> Open Deliverable Link
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* POST PROGRESS UPDATE FORM */}
+              <form onSubmit={handlePostDailyUpdate} style={{ background: '#F8FAFC', padding: 14, borderRadius: 8, border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MessageSquare size={15} color="var(--accent)" /> Post Work Update / Log
+                </div>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  placeholder="Describe progress made (e.g. Uploaded 3 videos to Drive, updated responsive layout)..."
+                  value={updateBody}
+                  onChange={(e) => setUpdateBody(e.target.value)}
+                  style={{ marginBottom: 8 }}
+                />
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input
+                    className="form-input"
+                    placeholder="Proof / Link URL (optional)"
+                    value={updateLink}
+                    onChange={(e) => setUpdateLink(e.target.value)}
+                    style={{ flex: '1 1 200px', fontSize: 12 }}
+                  />
+                  <select
+                    className="form-select"
+                    value={updateStatus}
+                    onChange={(e) => setUpdateStatus(e.target.value as TaskStatus)}
+                    style={{ width: 140, fontSize: 12 }}
+                  >
+                    <option value="">Status (Keep current)</option>
+                    {Object.entries(STATUS_CONFIG).map(([st, cfg]) => (
+                      <option key={st} value={st}>{cfg.label}</option>
+                    ))}
+                  </select>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={submittingUpdate}>
+                    {submittingUpdate ? 'Saving...' : 'Post Update'}
+                  </button>
+                </div>
+              </form>
+
+              {/* PROGRESS & ACTIVITY HISTORY LOG */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+                  Work Log &amp; Status History ({selectedTask.updates?.length ?? 0})
+                </div>
+                {(!selectedTask.updates || selectedTask.updates.length === 0) ? (
+                  <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic', padding: '12px 0' }}>
+                    No updates posted yet. Employees can post progress notes above.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {selectedTask.updates.map((u: any) => {
+                      const canManageLog =
+                        currentProfile?.id === u.author_id ||
+                        currentProfile?.role === 'ADMIN' ||
+                        currentProfile?.role === 'ACCOUNT_MANAGER'
+                      const isEditingThis = editingLogId === u.id
+                      const isConfirmingDeleteThis = confirmingDeleteLogId === u.id
+
+                      return (
+                        <div key={u.id} style={{ padding: 10, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {u.author?.name ?? 'System'}
+                              </span>
+                              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                                {format(parseISO(u.created_at), 'MMM d, yyyy h:mm a')}
+                              </span>
+                            </div>
+
+                            {canManageLog && !isEditingThis && !isConfirmingDeleteThis && (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-xs"
+                                  onClick={() => {
+                                    setEditingLogId(u.id)
+                                    setEditingLogBody(u.body)
+                                    setEditingLogLink(u.attachment_url || '')
+                                  }}
+                                  title="Edit work log"
+                                >
+                                  <Edit2 size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-xs"
+                                  onClick={() => setConfirmingDeleteLogId(u.id)}
+                                  style={{ color: 'var(--danger)' }}
+                                  title="Delete work log"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* IN-PAGE DELETE CONFIRMATION ALERT */}
+                          {isConfirmingDeleteThis ? (
+                            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', padding: '8px 12px', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: '#991B1B' }}>
+                                Delete this daily work log entry?
+                              </span>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-xs"
+                                  onClick={() => setConfirmingDeleteLogId(null)}
+                                  style={{ background: '#fff' }}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-xs"
+                                  onClick={() => confirmDeleteLog(u.id)}
+                                  style={{ background: '#DC2626', color: '#fff', border: 'none', fontWeight: 600 }}
+                                >
+                                  Yes, Delete
+                                </button>
+                              </div>
+                            </div>
+                          ) : isEditingThis ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                              <textarea
+                                className="form-input"
+                                rows={2}
+                                value={editingLogBody}
+                                onChange={(e) => setEditingLogBody(e.target.value)}
+                                style={{ fontSize: 13 }}
+                              />
+                              <input
+                                className="form-input"
+                                placeholder="Proof / Deliverable Link URL"
+                                value={editingLogLink}
+                                onChange={(e) => setEditingLogLink(e.target.value)}
+                                style={{ fontSize: 12 }}
+                              />
+                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-xs"
+                                  onClick={() => setEditingLogId(null)}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-xs"
+                                  onClick={() => handleSaveLogEdit(u.id)}
+                                  disabled={savingLog}
+                                >
+                                  {savingLog ? 'Saving...' : 'Save Log'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{u.body}</div>
+                              {u.attachment_url && (
+                                <div style={{ marginTop: 6 }}>
+                                  <a
+                                    href={u.attachment_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, wordBreak: 'break-all' }}
+                                  >
+                                    <Paperclip size={12} /> View Proof / Deliverable <ExternalLink size={10} />
+                                  </a>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

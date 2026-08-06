@@ -44,6 +44,12 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
   const [dueDate, setDueDate] = useState('')
   const [taxPercent, setTaxPercent] = useState(5)
 
+  // Notes & Terms
+  const [notes, setNotes] = useState('')
+  const [terms, setTerms] = useState(`1. Payment due upon receipt or as specified above.
+2. Payment via bank transfer or cheque.
+3. Tax: 15% VAT applicable as per KSA tax regulations.`)
+
   // Items
   const [items, setItems] = useState<LineItem[]>([
     { id: genId(), description: '', qty: 1, unit_price: 0, amount: 0 },
@@ -139,6 +145,8 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
           tax_amount: taxAmount,
           total,
           status,
+          notes: notes.trim() || null,
+          terms: terms.trim() || null,
           created_by: profile.id,
         })
         .select('id')
@@ -390,6 +398,23 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
                 <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>
                   <Plus size={13} /> Add line item
                 </button>
+              </div>
+            </div>
+
+            {/* Notes & Terms Card */}
+            <div className="card">
+              <div className="card-header"><span className="text-section-header">Notes &amp; Terms</span></div>
+              <div className="card-body">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label">Notes</label>
+                    <textarea className="form-input" rows={3} placeholder="Additional notes or payment instructions..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Terms &amp; Conditions</label>
+                    <textarea className="form-input" rows={5} value={terms} onChange={(e) => setTerms(e.target.value)} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

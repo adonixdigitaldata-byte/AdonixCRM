@@ -10,9 +10,16 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+
+  // Technical Employees / Work Specialists land directly on /tasks?tab=MY
+  // ADMIN, ACCOUNT_MANAGER, and AGENT (Sales Agents) access the Dashboard
+  if (profile && profile.role === 'EMPLOYEE') {
+    redirect('/tasks?tab=MY')
+  }
+
   // ─── Fire all independent queries IN PARALLEL ─────────────────────
   const [
-    { data: profile },
     { data: stages },
     { data: leadsData },
     { data: recentLeads },
@@ -20,7 +27,6 @@ export default async function DashboardPage() {
     { data: invoices },
     { data: quotations },
   ] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
     supabase.from('lead_stages').select('*').order('sort_order'),
     supabase.from('leads').select('stage_id, source'),
     supabase

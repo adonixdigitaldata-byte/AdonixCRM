@@ -34,7 +34,7 @@ export default function AddLeadModal({ stages, agents, currentUserId, userRole, 
     potential_value: '',
     source: 'MANUAL',
     stage_id: stages[0]?.id ?? '',
-    assigned_agent_id: userRole === 'AGENT' ? currentUserId : '',
+    assigned_agent_id: (userRole === 'AGENT' || userRole === 'ACCOUNT_MANAGER') ? currentUserId : '',
     notes: '',
   })
 

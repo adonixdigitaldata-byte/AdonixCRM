@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { Search, Filter, Users, Calendar, TrendingUp, CreditCard } from 'lucide-react'
+import { Search, Filter, Users, Calendar, TrendingUp, CreditCard, Trash2, AlertTriangle, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 interface EnrichedClient {
   id: string
@@ -23,8 +24,9 @@ interface EnrichedClient {
 
 interface Props {
   initialClients: EnrichedClient[]
-  agents: { id: string; name: string }[]
+  agents: { id: string; name: string; role?: string }[]
   invoices: { client_id: string; total: number; amount_paid: number; status: string; currency: string }[]
+  currentProfile?: { id: string; name: string; role?: string } | null
 }
 
 function convertToSAR(amount: number, currency?: string): number {
@@ -52,14 +54,41 @@ const CYCLE_LABELS: Record<string, string> = {
   NONE: 'None',
 }
 
-export default function ClientsClient({ initialClients, agents, invoices }: Props) {
+export default function ClientsClient({ initialClients, agents, invoices, currentProfile }: Props) {
   const router = useRouter()
+  const supabase = createClient()
+  const [clientsList, setClientsList] = useState<EnrichedClient[]>(initialClients)
+  const [clientToDelete, setClientToDelete] = useState<EnrichedClient | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [agentFilter, setAgentFilter] = useState('ALL')
   const [cycleFilter, setCycleFilter] = useState('ALL')
   const [page, setPage] = useState(1)
   const limit = 10
+
+  async function handleDeleteClient(clientId: string) {
+    setDeletingId(clientId)
+    try {
+      // Delete linked child records
+      await supabase.from('client_tasks').delete().eq('client_id', clientId)
+      await supabase.from('invoices').delete().eq('client_id', clientId)
+      await supabase.from('quotations').delete().eq('client_id', clientId)
+      await supabase.from('client_assets').delete().eq('client_id', clientId)
+
+      // Delete client
+      const { error } = await supabase.from('clients').delete().eq('id', clientId)
+      if (error) throw error
+
+      setClientsList((prev) => prev.filter((c) => c.id !== clientId))
+      setClientToDelete(null)
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete client')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   // Calculate MRR, Active Retainers, Expiring Contracts
   let mrrTotal = 0
@@ -69,7 +98,7 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
   thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
   const today = new Date()
 
-  initialClients.forEach((c) => {
+  clientsList.forEach((c) => {
     const isClientActive = c.client_status === 'ACTIVE' || c.client_status === 'VIP'
     if (isClientActive) {
       // Retainer / MRR Calc
@@ -96,7 +125,7 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
   })
 
   // Filtering
-  const filtered = initialClients.filter((c) => {
+  const filtered = clientsList.filter((c) => {
     const query = search.toLowerCase().trim()
     const matchesSearch =
       !query ||
@@ -115,6 +144,14 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
   // Pagination
   const totalItems = filtered.length
   const totalPages = Math.ceil(totalItems / limit) || 1
+
+  // Auto-redirect to previous valid page if current page becomes empty (e.g. after deleting clients)
+  useEffect(() => {
+    if (page > totalPages && totalPages >= 1) {
+      setPage(totalPages)
+    }
+  }, [page, totalPages])
+
   const startIndex = (page - 1) * limit
   const paginatedClients = filtered.slice(startIndex, startIndex + limit)
 
@@ -122,9 +159,11 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
     <div>
       <div className="page-header">
         <div>
-          <h1 className="text-page-title">Client Directory</h1>
+          <h1 className="text-page-title">{currentProfile?.role === 'ADMIN' ? 'Client Directory' : 'Assigned Clients'}</h1>
           <p className="text-meta" style={{ marginTop: 2 }}>
-            Manage client profiles, custom credentials, retainer invoicing, and asset drives
+            {currentProfile?.role === 'ADMIN'
+              ? 'Manage client profiles, custom credentials, retainer invoicing, and asset drives'
+              : 'Clients assigned to your account and technical deliverables'}
           </p>
         </div>
       </div>
@@ -221,7 +260,7 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
               style={{ width: 160 }}
             >
               <option value="ALL">All Managers</option>
-              {agents.map((a) => (
+              {agents.filter((a) => !a.role || a.role === 'ACCOUNT_MANAGER' || a.role === 'ADMIN').map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
@@ -257,15 +296,16 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
             <div className="table-wrapper">
               <table className="table">
                 <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Company</th>
-                    <th>Status</th>
-                    <th>Account Manager</th>
-                    <th className="num">Billing Retainer</th>
-                    <th>Contract Duration</th>
-                    <th>Added</th>
-                  </tr>
+                    <tr>
+                      <th>Name</th>
+                      <th>Company</th>
+                      <th>Status</th>
+                      <th>Account Manager</th>
+                      <th className="num">Billing Retainer</th>
+                      <th>Contract Duration</th>
+                      <th>Added</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
                 </thead>
                 <tbody>
                   {paginatedClients.map((c) => {
@@ -321,6 +361,19 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
                         <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
                           {format(new Date(c.created_at), 'dd MMM yyyy')}
                         </td>
+                        <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                          {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs"
+                              onClick={() => setClientToDelete(c)}
+                              style={{ color: 'var(--danger)' }}
+                              title="Delete client record"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
@@ -361,6 +414,66 @@ export default function ClientsClient({ initialClients, agents, invoices }: Prop
           </div>
         )}
       </div>
+      {/* Structured Delete Client Modal Popup */}
+      {clientToDelete && (
+        <div className="modal-backdrop" onClick={() => setClientToDelete(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: '100%' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--danger)', fontWeight: 700, fontSize: 16 }}>
+                <AlertTriangle size={18} /> Delete Client Record
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setClientToDelete(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 4px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 14, color: 'var(--text-primary)', padding: '0 4px' }}>
+                Are you sure you want to delete <strong>{clientToDelete.name}</strong> {clientToDelete.company ? `(${clientToDelete.company})` : ''}?
+              </div>
+
+              {/* Structured Warning Callout */}
+              <div style={{
+                background: '#FEF2F2',
+                border: '1px solid #FCA5A5',
+                borderRadius: 8,
+                padding: '14px 16px',
+                margin: '2px 4px',
+                fontSize: 13,
+                color: '#991B1B',
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#7F1D1D' }}>
+                  <AlertTriangle size={15} /> Irreversible Action &amp; Linked Data Removal
+                </div>
+                <div style={{ fontSize: 12, color: '#7F1D1D', marginBottom: 6, lineHeight: 1.4 }}>
+                  Deleting this client will permanently purge all linked records from the database:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3, color: '#991B1B' }}>
+                  <li>Linked <strong>Quotations</strong> &amp; Proposal items</li>
+                  <li>Linked <strong>Invoices</strong> &amp; Payment history</li>
+                  <li>Linked <strong>Technical Tasks</strong> &amp; Work updates</li>
+                  <li>Stored <strong>Asset Credentials</strong> &amp; Logins</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setClientToDelete(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => handleDeleteClient(clientToDelete.id)}
+                disabled={deletingId === clientToDelete.id}
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none', fontWeight: 600, padding: '6px 16px' }}
+              >
+                {deletingId === clientToDelete.id ? 'Deleting...' : 'Yes, Delete Client'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

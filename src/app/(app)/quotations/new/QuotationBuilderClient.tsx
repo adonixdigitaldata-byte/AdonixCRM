@@ -122,6 +122,7 @@ All payments are non-refundable once the corresponding project phase has been co
           phone: clientPhone.trim() || null,
           address: clientAddress.trim() || null,
           lead_id: leadId,
+          assigned_agent_id: profile.id,
         })
         .select('id')
         .single()

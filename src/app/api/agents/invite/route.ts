@@ -6,7 +6,7 @@ import { getAppUrl } from '@/lib/utils/url'
 export async function POST(request: NextRequest) {
   const supabase = await createServiceClient()
   const body = await request.json()
-  const { email, name, mode } = body
+  const { email, name, mode, role = 'AGENT', specialization = null } = body
 
   if (!email) {
     return NextResponse.json({ error: 'Email address is required' }, { status: 400 })
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     email: email.trim(),
     options: {
       redirectTo: callbackUrl,
-      data: { name: name || email.split('@')[0], role: 'AGENT' },
+      data: { name: name || email.split('@')[0], role: role || 'AGENT' },
     },
   })
 
@@ -65,20 +65,36 @@ export async function POST(request: NextRequest) {
     userId = recoveryData.user?.id ?? null
   }
 
-  // 3. Upsert profile so agent appears in table list
+  let finalRole = role || 'AGENT'
+  let finalSpec = specialization || null
+
+  // 3. Upsert profile so team member appears in table list, preserving existing role if profile already exists
   if (userId) {
+    const { data: existingProf } = await supabase
+      .from('profiles')
+      .select('role, specialization, work_status')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (existingProf) {
+      finalRole = body.role !== undefined ? body.role : existingProf.role
+      finalSpec = body.specialization !== undefined ? body.specialization : (existingProf.specialization || null)
+    }
+
     await supabase.from('profiles').upsert({
       id: userId,
       name,
       email,
-      role: 'AGENT',
+      role: finalRole,
+      specialization: finalSpec,
+      work_status: existingProf?.work_status || 'AVAILABLE',
       is_active: true,
     }, { onConflict: 'id' })
   }
 
-  // 4. Send branded email via Resend with the actual action link (which has the Supabase token)
+  // 4. Send branded email via Resend with the actual action link
   if (actionLink) {
-    await sendAgentInviteEmail(email, name, actionLink)
+    await sendAgentInviteEmail(email, name, actionLink, finalRole, finalSpec)
   } else {
     return NextResponse.json({ error: 'Failed to generate invitation link' }, { status: 400 })
   }

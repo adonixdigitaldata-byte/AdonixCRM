@@ -283,6 +283,32 @@ textarea {
   box-sizing: border-box;
 }
 
+.client-detail-footer {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  left: var(--sidebar-width);
+  z-index: 90;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+  padding: 0 24px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 768px) {
+  .client-detail-footer {
+    left: 0 !important;
+    padding: 0 12px !important;
+  }
+  .client-detail-footer-text {
+    display: none !important;
+  }
+}
+
 /* ============================================================
    BUTTONS
    ============================================================ */
@@ -1800,6 +1826,39 @@ textarea.form-input {
   justify-content: center;
 }
 
+/* --- Document banner card layout (Universal/Print) --- */
+.doc-banner-card {
+  padding: 16px 20px !important;
+  max-width: 900px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.doc-banner-top {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+
+.doc-banner-brand-bar {
+  margin-top: 10px !important;
+  padding-top: 8px !important;
+  border-top: 1px solid var(--border) !important;
+  font-size: 11px !important;
+  color: var(--text-secondary) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 /* ============================================================
    MOBILE RESPONSIVE — max-width: 768px
    Desktop styles are completely untouched above.
@@ -2155,17 +2214,7 @@ textarea.form-input {
     font-size: 13px !important;
   }
 
-  /* --- Document banner card stacking on mobile --- */
-  .doc-banner-card {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 12px !important;
-  }
 
-  .doc-banner-card > div:last-child {
-    text-align: left !important;
-    width: 100% !important;
-  }
 
   /* --- Flex responsive stacker on mobile --- */
   .flex-responsive {

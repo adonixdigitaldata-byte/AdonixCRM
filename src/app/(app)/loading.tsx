@@ -14,19 +14,17 @@ export default function AppLoading() {
       }}
     >
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div
-          className="sidebar-logo-icon"
+        <img
+          src="/Adonix X Logo.jpeg"
+          alt="Adonix Logo"
           style={{
             width: 44,
             height: 44,
-            fontSize: 18,
-            fontWeight: 700,
             borderRadius: 'var(--radius)',
             boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
+            objectFit: 'cover',
           }}
-        >
-          A
-        </div>
+        />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 14, fontWeight: 500 }}>
         <Loader2 size={20} className="spin" style={{ color: 'var(--accent)', animation: 'spin 0.75s linear infinite' }} />

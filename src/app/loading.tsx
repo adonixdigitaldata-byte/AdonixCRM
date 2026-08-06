@@ -15,19 +15,17 @@ export default function RootLoading() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div
-          className="sidebar-logo-icon"
+        <img
+          src="/Adonix X Logo.jpeg"
+          alt="Adonix Logo"
           style={{
             width: 44,
             height: 44,
-            fontSize: 20,
-            fontWeight: 700,
             borderRadius: 'var(--radius)',
             boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
+            objectFit: 'cover',
           }}
-        >
-          A
-        </div>
+        />
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Adonix CRM</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Loading platform...</div>
