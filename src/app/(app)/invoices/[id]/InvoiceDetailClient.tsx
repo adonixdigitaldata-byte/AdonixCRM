@@ -350,7 +350,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
             </button>
           )}
 
-          {profile.role === 'ADMIN' && (
+          {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteInvoiceModal} disabled={saving}>
               <Trash2 size={14} />
               Delete

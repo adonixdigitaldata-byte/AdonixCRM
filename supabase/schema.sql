@@ -424,6 +424,14 @@ returns boolean as $$
   );
 $$ language sql stable security definer;
 
+-- Helper: is current user admin or account manager?
+create or replace function is_admin_or_manager()
+returns boolean as $$
+  select exists (
+    select 1 from profiles where id = auth.uid() and role in ('ADMIN', 'ACCOUNT_MANAGER')
+  );
+$$ language sql stable security definer;
+
 -- PROFILES
 create policy "Authenticated users can view profiles" on profiles
   for select using (auth.uid() is not null);
@@ -498,18 +506,33 @@ create policy "Agents view their import batches" on import_batches
 -- CLIENTS
 create policy "Admins full access clients" on clients for all using (is_admin());
 create policy "Agents view clients" on clients for select using (auth.uid() is not null);
+create policy "Admins and managers delete clients" on clients for delete using (is_admin_or_manager());
 
 -- QUOTATIONS & ITEMS
 create policy "Admins full access quotations" on quotations for all using (is_admin());
-create policy "Agents full access quotations" on quotations for all using (auth.uid() is not null);
+create policy "Agents write quotations" on quotations for insert with check (auth.uid() is not null);
+create policy "Agents update quotations" on quotations for update using (auth.uid() is not null);
+create policy "Agents read quotations" on quotations for select using (auth.uid() is not null);
+create policy "Agents delete quotations" on quotations for delete using (auth.uid() is not null);
+
 create policy "Admins full access quotation_items" on quotation_items for all using (is_admin());
-create policy "Agents full access quotation_items" on quotation_items for all using (auth.uid() is not null);
+create policy "Agents write quotation_items" on quotation_items for insert with check (auth.uid() is not null);
+create policy "Agents update quotation_items" on quotation_items for update using (auth.uid() is not null);
+create policy "Agents read quotation_items" on quotation_items for select using (auth.uid() is not null);
+create policy "Agents delete quotation_items" on quotation_items for delete using (auth.uid() is not null);
 
 -- INVOICES & ITEMS
 create policy "Admins full access invoices" on invoices for all using (is_admin());
-create policy "Agents full access invoices" on invoices for all using (auth.uid() is not null);
+create policy "Agents write invoices" on invoices for insert with check (auth.uid() is not null);
+create policy "Agents update invoices" on invoices for update using (auth.uid() is not null);
+create policy "Agents read invoices" on invoices for select using (auth.uid() is not null);
+create policy "Agents delete invoices" on invoices for delete using (auth.uid() is not null);
+
 create policy "Admins full access invoice_items" on invoice_items for all using (is_admin());
-create policy "Agents full access invoice_items" on invoice_items for all using (auth.uid() is not null);
+create policy "Agents write invoice_items" on invoice_items for insert with check (auth.uid() is not null);
+create policy "Agents update invoice_items" on invoice_items for update using (auth.uid() is not null);
+create policy "Agents read invoice_items" on invoice_items for select using (auth.uid() is not null);
+create policy "Agents delete invoice_items" on invoice_items for delete using (auth.uid() is not null);
 
 -- PAYMENTS
 create policy "Admins full access payments" on payments for all using (is_admin());
@@ -620,13 +643,15 @@ create policy "Authors manage delete task updates" on client_task_updates for de
   author_id = auth.uid() or is_admin() or exists (select 1 from profiles where id = auth.uid() and role in ('ADMIN', 'ACCOUNT_MANAGER'))
 );
 
--- Allow assigned employees to view and update client records
+-- Allow authenticated users to view, insert, and update client records
 drop policy if exists "Agents view clients" on clients;
+drop policy if exists "Authenticated view clients" on clients;
+drop policy if exists "Assigned employee update clients" on clients;
+drop policy if exists "Authenticated insert clients" on clients;
+drop policy if exists "Authenticated update clients" on clients;
+
 create policy "Authenticated view clients" on clients for select using (auth.uid() is not null);
-create policy "Assigned employee update clients" on clients for update using (
-  assigned_agent_id = auth.uid() or exists (
-    select 1 from client_tasks where client_id = clients.id and assigned_employee_id = auth.uid()
-  ) or is_admin()
-);
+create policy "Authenticated insert clients" on clients for insert with check (auth.uid() is not null);
+create policy "Authenticated update clients" on clients for update using (auth.uid() is not null);
 
 

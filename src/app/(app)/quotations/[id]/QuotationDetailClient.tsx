@@ -212,7 +212,7 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
               Convert to invoice
             </button>
           )}
-          {profile.role === 'ADMIN' && (
+          {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteModal} disabled={updating}>
               <Trash2 size={14} />
               Delete

@@ -34,8 +34,8 @@ export async function POST(req: Request) {
       .eq('id', user.id)
       .single()
 
-    if (profile?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden: Only Admins can delete quotations' }, { status: 403 })
+    if (!profile || !['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden: Only Admins, Account Managers, and Sales Agents can delete quotations' }, { status: 403 })
     }
 
     const { quotationId } = await req.json()

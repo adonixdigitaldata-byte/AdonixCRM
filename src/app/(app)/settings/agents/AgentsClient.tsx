@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { UserPlus, CheckCircle, XCircle, Clock, Search, ChevronRight, Edit2, Shield, User, Briefcase, X } from 'lucide-react'
+import { UserPlus, CheckCircle, XCircle, Clock, Search, ChevronRight, Edit2, Shield, User, Briefcase, X, AlertTriangle } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { Profile, UserRole, EmployeeSpecialization, WorkStatus } from '@/types/database'
 
@@ -55,6 +55,11 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
   const [editSpecialization, setEditSpecialization] = useState<string>('')
   const [editWorkStatus, setEditWorkStatus] = useState<WorkStatus>('AVAILABLE')
   const [editLoading, setEditLoading] = useState(false)
+
+  // Delete User Modal State
+  const [deleteUser, setDeleteUser] = useState<EnrichedAgent | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const supabase = createClient()
 
@@ -194,6 +199,35 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
       .update({ is_active: !currentStatus })
       .eq('id', agentId)
     setAgents(agents.map((a) => a.id === agentId ? { ...a, is_active: !currentStatus } : a))
+  }
+
+  const currentUser = agents.find((a) => a.id === currentUserId)
+  const isAdmin = currentUser?.role === 'ADMIN'
+
+  async function handleDeleteUser() {
+    if (!deleteUser || deleteLoading) return
+    setDeleteLoading(true)
+    setDeleteError('')
+
+    try {
+      const res = await fetch('/api/agents/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: deleteUser.id }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete user')
+      }
+
+      setAgents(agents.filter((a) => a.id !== deleteUser.id))
+      setDeleteUser(null)
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error deleting user')
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
   const maxLeads = 1
@@ -395,6 +429,8 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                           fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12,
                           background: agent.work_status === 'BUSY' ? '#FEF3C7' : agent.work_status === 'ON_LEAVE' ? '#FEE2E2' : '#DCFCE7',
                           color: agent.work_status === 'BUSY' ? '#D97706' : agent.work_status === 'ON_LEAVE' ? '#B91C1C' : '#15803D',
+                          whiteSpace: 'nowrap',
+                          display: 'inline-block'
                         }}>
                           ● {agent.work_status || 'AVAILABLE'}
                         </span>
@@ -466,6 +502,19 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                           >
                             {agent.is_active ? 'Deactivate' : 'Activate'}
                           </button>
+                          {isAdmin && agent.id !== currentUserId && (
+                            <button
+                              className="btn btn-ghost btn-xs"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteUser(agent)
+                                setDeleteError('')
+                              }}
+                              style={{ color: 'var(--danger)', fontWeight: 500 }}
+                            >
+                              Delete
+                            </button>
+                          )}
                           <ChevronRight size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
                         </div>
                       </td>
@@ -541,6 +590,61 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteUser && (
+        <div className="modal-backdrop" onClick={() => !deleteLoading && setDeleteUser(null)}>
+          <div className="modal-box" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ padding: 8, borderRadius: 8, background: '#fef2f2', color: 'var(--danger)' }}>
+                  <AlertTriangle size={20} />
+                </div>
+                <h3 className="modal-title">Delete Team Member</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={() => setDeleteUser(null)}
+                disabled={deleteLoading}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 20px' }}>
+              {deleteError && (
+                <div className="alert alert-danger" style={{ marginBottom: 12, padding: '8px 12px', fontSize: 13 }}>
+                  {deleteError}
+                </div>
+              )}
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                Are you sure you want to permanently delete <strong style={{ color: 'var(--text-primary)' }}>{deleteUser.name}</strong>?
+                This will delete their profile and revoke their authentication credentials entirely. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setDeleteUser(null)}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={handleDeleteUser}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </div>
           </div>
         </div>
       )}

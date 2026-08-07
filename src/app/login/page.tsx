@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
@@ -17,6 +17,14 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'deactivated') {
+      setError('Your account has been deactivated. Please contact your administrator.')
+      const supabase = createClient()
+      supabase.auth.signOut()
+    }
+  }, [searchParams])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -50,7 +58,7 @@ function LoginForm() {
     }
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -59,6 +67,21 @@ function LoginForm() {
       setError('Invalid email or password')
       setLoading(false)
       return
+    }
+
+    if (authData?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (profile && profile.is_active === false) {
+        await supabase.auth.signOut()
+        setError('Your account has been deactivated. Please contact your administrator.')
+        setLoading(false)
+        return
+      }
     }
 
     const targetUrl = redirectTo.startsWith('/') ? redirectTo : '/dashboard'

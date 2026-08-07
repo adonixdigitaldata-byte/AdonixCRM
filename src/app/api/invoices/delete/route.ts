@@ -34,8 +34,8 @@ export async function POST(req: Request) {
       .eq('id', user.id)
       .single()
 
-    if (profile?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden: Only Admins can delete invoices' }, { status: 403 })
+    if (!profile || !['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden: Only Admins, Account Managers, and Sales Agents can delete invoices' }, { status: 403 })
     }
 
     const { invoiceId } = await req.json()

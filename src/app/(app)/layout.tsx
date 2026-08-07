@@ -24,6 +24,10 @@ export default async function AppLayout({
     .single()
 
   if (!profile) redirect('/login')
+  if (profile.is_active === false) {
+    await supabase.auth.signOut()
+    redirect('/login?error=deactivated')
+  }
 
   return (
     <div className="app-shell">
