@@ -42,7 +42,7 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
   const [currency, setCurrency] = useState(invoice.currency ?? 'SAR')
   const [issueDate, setIssueDate] = useState(invoice.issue_date ?? new Date().toISOString().slice(0, 10))
   const [dueDate, setDueDate] = useState(invoice.due_date ?? '')
-  const [taxPercent, setTaxPercent] = useState(Number(invoice.tax_percent ?? 5))
+  const [taxPercent, setTaxPercent] = useState(Number(invoice.tax_percent ?? 15))
   const [status, setStatus] = useState(invoice.status)
 
   // Notes & Terms

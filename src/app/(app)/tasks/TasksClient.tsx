@@ -31,6 +31,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { ClientTask, ClientTaskUpdate, Profile, TaskCategory, TaskPriority, TaskStatus } from '@/types/database'
+import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
 
 interface Props {
   initialTasks: ClientTask[]
@@ -358,37 +359,75 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
   const [savingLog, setSavingLog] = useState(false)
   const [confirmingDeleteLogId, setConfirmingDeleteLogId] = useState<string | null>(null)
 
-  // Edit Task Instructions & Deliverable Link Handler
+  // Edit Task Details Handler (Admin & Account Manager)
   const [isEditingTaskDetails, setIsEditingTaskDetails] = useState(false)
+  const [editTaskTitle, setEditTaskTitle] = useState('')
+  const [editTaskClientId, setEditTaskClientId] = useState('')
+  const [editTaskCategory, setEditTaskCategory] = useState<TaskCategory>('WEBSITE')
+  const [editTaskEmployeeId, setEditTaskEmployeeId] = useState('')
+  const [editTaskDueDate, setEditTaskDueDate] = useState('')
+  const [editTaskPriority, setEditTaskPriority] = useState<TaskPriority>('MEDIUM')
   const [editTaskDescription, setEditTaskDescription] = useState('')
   const [editTaskDeliverableLink, setEditTaskDeliverableLink] = useState('')
   const [savingTaskDetails, setSavingTaskDetails] = useState(false)
 
+  function startEditingTaskDetails(task: ClientTask) {
+    setEditTaskTitle(task.title || '')
+    setEditTaskClientId(task.client_id || '')
+    setEditTaskCategory(task.category || 'WEBSITE')
+    setEditTaskEmployeeId(task.assigned_employee_id || '')
+    setEditTaskDueDate(task.due_date || '')
+    setEditTaskPriority(task.priority || 'MEDIUM')
+    setEditTaskDescription(task.description || '')
+    setEditTaskDeliverableLink(task.deliverable_link || '')
+    setIsEditingTaskDetails(true)
+  }
+
   async function handleSaveTaskDetails() {
     if (!selectedTask || savingTaskDetails) return
+    if (!editTaskTitle.trim()) {
+      alert('Task title is required.')
+      return
+    }
+    if (!editTaskClientId) {
+      alert('Client selection is required.')
+      return
+    }
     setSavingTaskDetails(true)
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('client_tasks')
         .update({
+          title: editTaskTitle.trim(),
+          client_id: editTaskClientId,
+          category: editTaskCategory,
+          assigned_employee_id: editTaskEmployeeId || null,
+          due_date: editTaskDueDate || null,
+          priority: editTaskPriority,
           description: editTaskDescription.trim() || null,
           deliverable_link: editTaskDeliverableLink.trim() || null,
         })
         .eq('id', selectedTask.id)
+        .select(`
+          *,
+          client:clients(id, name, company),
+          assigned_employee:profiles!assigned_employee_id(id, name, role, specialization, work_status)
+        `)
+        .single()
 
       if (error) throw error
 
-      const updatedTask = {
+      const updatedTask: ClientTask = {
         ...selectedTask,
-        description: editTaskDescription.trim() || null,
-        deliverable_link: editTaskDeliverableLink.trim() || null,
+        ...data,
+        updates: selectedTask.updates,
       }
 
       setSelectedTask(updatedTask)
       setTasks(tasks.map((t) => (t.id === selectedTask.id ? updatedTask : t)))
       setIsEditingTaskDetails(false)
     } catch (err: any) {
-      alert(err.message || 'Failed to update task instructions')
+      alert(err.message || 'Failed to update task details')
     } finally {
       setSavingTaskDetails(false)
     }
@@ -707,6 +746,19 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                                 {t.updates?.length ?? 0}
                               </span>
                             </button>
+                            {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') && (
+                              <button
+                                className="btn btn-ghost btn-icon btn-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedTask(t)
+                                  startEditingTaskDetails(t)
+                                }}
+                                title="Edit Task Details"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            )}
                             {canDeleteTask(t, currentProfile) && (
                               <button
                                 className="btn btn-ghost btn-icon btn-xs"
@@ -782,19 +834,12 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                 {/* Select Client */}
                 <div className="form-group">
                   <label className="form-label form-label-required">Select Client</label>
-                  <select
-                    className="form-select"
-                    value={newClientId}
-                    onChange={(e) => setNewClientId(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Choose Client --</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.company ? `(${c.company})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <ClientSearchSelect
+                    clients={clients}
+                    selectedClientId={newClientId}
+                    onSelectClient={(c) => setNewClientId(c.id)}
+                    placeholder="Search & select client by name or company..."
+                  />
                 </div>
 
                 {/* Task Title */}
@@ -921,6 +966,16 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') && !isEditingTaskDetails && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => startEditingTaskDetails(selectedTask)}
+                    title="Edit Task Details"
+                  >
+                    <Edit2 size={14} /> Edit Task
+                  </button>
+                )}
                 {canDeleteTask(selectedTask, currentProfile) && (
                   <button
                     type="button"
@@ -932,128 +987,208 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                     <Trash2 size={14} /> Delete Task
                   </button>
                 )}
-                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTask(null)}>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedTask(null); setIsEditingTaskDetails(false); }}>
                   <X size={16} />
                 </button>
               </div>
             </div>
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Task Meta Bar */}
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: 12, background: 'var(--bg)', borderRadius: 8, fontSize: 13 }}>
-                <div>
-                  <span className="text-meta">Category: </span>
-                  <strong>{CATEGORY_LABELS[selectedTask.category]?.label}</strong>
-                </div>
-                <div>
-                  <span className="text-meta">Specialist: </span>
-                  <strong>{selectedTask.assigned_employee?.name ?? 'Unassigned'}</strong>
-                </div>
-                <div>
-                  <span className="text-meta">Due Date: </span>
-                  <strong>{selectedTask.due_date ?? 'No deadline'}</strong>
-                </div>
-                <div>
-                  <span className="text-meta">Priority: </span>
-                  <strong style={{ color: PRIORITY_CONFIG[selectedTask.priority]?.color }}>{selectedTask.priority}</strong>
-                </div>
-              </div>
+              {isEditingTaskDetails ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, background: '#F8FAFC', padding: 16, borderRadius: 8, border: '1px solid #CBD5E1' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', borderBottom: '1px solid #E2E8F0', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Edit2 size={16} color="var(--accent)" /> Edit Technical Task Details
+                  </div>
 
-              {/* TASK REQUIREMENTS & INSTRUCTIONS SECTION */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                    Requirements &amp; Instructions
-                  </span>
-                  {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER') && !isEditingTaskDetails && (
+                  {/* Select Client */}
+                  <div className="form-group">
+                    <label className="form-label form-label-required">Client</label>
+                    <ClientSearchSelect
+                      clients={clients}
+                      selectedClientId={editTaskClientId}
+                      onSelectClient={(c) => setEditTaskClientId(c.id)}
+                      placeholder="Search & select client by name or company..."
+                    />
+                  </div>
+
+                  {/* Task Title */}
+                  <div className="form-group">
+                    <label className="form-label form-label-required">Task Title / Deliverable Name</label>
+                    <input
+                      className="form-input"
+                      placeholder="e.g. Design Landing Page, 10 Short AI Reels, Meta Ads Campaign"
+                      value={editTaskTitle}
+                      onChange={(e) => setEditTaskTitle(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {/* Category */}
+                    <div className="form-group" style={{ flex: '1 1 200px' }}>
+                      <label className="form-label">Category / Department</label>
+                      <select
+                        className="form-select"
+                        value={editTaskCategory}
+                        onChange={(e) => setEditTaskCategory(e.target.value as TaskCategory)}
+                      >
+                        {Object.entries(CATEGORY_LABELS).map(([cat, cfg]) => (
+                          <option key={cat} value={cat}>{cfg.icon} {cfg.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Assigned Employee */}
+                    <div className="form-group" style={{ flex: '1 1 200px' }}>
+                      <label className="form-label">Assign Specialist / Employee</label>
+                      <select
+                        className="form-select"
+                        value={editTaskEmployeeId}
+                        onChange={(e) => setEditTaskEmployeeId(e.target.value)}
+                      >
+                        <option value="">Unassigned</option>
+                        {profiles.map((p) => {
+                          const activeCount = employeeWorkloads[p.id] || 0
+                          const statusBadge = p.work_status === 'BUSY' ? ' (Busy)' : p.work_status === 'ON_LEAVE' ? ' (On Leave)' : ' (Available)'
+                          return (
+                            <option key={p.id} value={p.id}>
+                              {p.name} - {p.specialization || p.role} [{activeCount} active tasks]{statusBadge}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {/* Priority */}
+                    <div className="form-group" style={{ flex: '1 1 200px' }}>
+                      <label className="form-label">Priority</label>
+                      <select
+                        className="form-select"
+                        value={editTaskPriority}
+                        onChange={(e) => setEditTaskPriority(e.target.value as TaskPriority)}
+                      >
+                        {Object.entries(PRIORITY_CONFIG).map(([pr, cfg]) => (
+                          <option key={pr} value={pr}>{cfg.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Due Date */}
+                    <div className="form-group" style={{ flex: '1 1 200px' }}>
+                      <label className="form-label">Target Due Date</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={editTaskDueDate}
+                        onChange={(e) => setEditTaskDueDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Deliverable Link */}
+                  <div className="form-group">
+                    <label className="form-label">Deliverable / Work Folder URL (Optional)</label>
+                    <input
+                      className="form-input"
+                      placeholder="https://drive.google.com/... or Figma link"
+                      value={editTaskDeliverableLink}
+                      onChange={(e) => setEditTaskDeliverableLink(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="form-group">
+                    <label className="form-label">Detailed Requirements / Instructions</label>
+                    <textarea
+                      className="form-input"
+                      rows={4}
+                      placeholder="Specific guidelines or instructions for the employee..."
+                      value={editTaskDescription}
+                      onChange={(e) => setEditTaskDescription(e.target.value)}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 6 }}>
                     <button
                       type="button"
-                      className="btn btn-outline btn-xs"
-                      onClick={() => {
-                        setIsEditingTaskDetails(true)
-                        setEditTaskDescription(selectedTask.description || '')
-                        setEditTaskDeliverableLink(selectedTask.deliverable_link || '')
-                      }}
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setIsEditingTaskDetails(false)}
                     >
-                      <Edit2 size={12} /> Edit Instructions
+                      Cancel
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={handleSaveTaskDetails}
+                      disabled={savingTaskDetails}
+                    >
+                      {savingTaskDetails ? 'Saving...' : 'Save Task Changes'}
+                    </button>
+                  </div>
                 </div>
-
-                {isEditingTaskDetails ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#F8FAFC', padding: 12, borderRadius: 8, border: '1px solid #CBD5E1' }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: 12 }}>Instructions / Guidelines</label>
-                      <textarea
-                        className="form-input"
-                        rows={4}
-                        value={editTaskDescription}
-                        onChange={(e) => setEditTaskDescription(e.target.value)}
-                        placeholder="Enter task guidelines and instructions for the specialist..."
-                        style={{ fontSize: 13 }}
-                      />
+              ) : (
+                <>
+                  {/* Task Meta Bar */}
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: 12, background: 'var(--bg)', borderRadius: 8, fontSize: 13 }}>
+                    <div>
+                      <span className="text-meta">Category: </span>
+                      <strong>{CATEGORY_LABELS[selectedTask.category]?.label}</strong>
                     </div>
-
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: 12 }}>Deliverable Folder / Link (Optional)</label>
-                      <input
-                        className="form-input"
-                        value={editTaskDeliverableLink}
-                        onChange={(e) => setEditTaskDeliverableLink(e.target.value)}
-                        placeholder="https://drive.google.com/... or Figma link"
-                        style={{ fontSize: 12 }}
-                      />
+                    <div>
+                      <span className="text-meta">Specialist: </span>
+                      <strong>{selectedTask.assigned_employee?.name ?? 'Unassigned'}</strong>
                     </div>
-
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-xs"
-                        onClick={() => setIsEditingTaskDetails(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-xs"
-                        onClick={handleSaveTaskDetails}
-                        disabled={savingTaskDetails}
-                      >
-                        {savingTaskDetails ? 'Saving...' : 'Save Instructions'}
-                      </button>
+                    <div>
+                      <span className="text-meta">Due Date: </span>
+                      <strong>{selectedTask.due_date ?? 'No deadline'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-meta">Priority: </span>
+                      <strong style={{ color: PRIORITY_CONFIG[selectedTask.priority]?.color }}>{selectedTask.priority}</strong>
                     </div>
                   </div>
-                ) : (
+
+                  {/* TASK REQUIREMENTS & INSTRUCTIONS SECTION */}
                   <div>
-                    {selectedTask.description ? (
-                      <div style={{ fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere', background: '#fff', padding: 10, borderRadius: 6, border: '1px solid var(--border)' }}>
-                        {selectedTask.description}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic', padding: '6px 0' }}>
-                        No instructions provided yet. Click "Edit Instructions" to add guidelines.
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                        Requirements &amp; Instructions
+                      </span>
+                    </div>
 
-                    {selectedTask.deliverable_link && (
-                      <div style={{ marginTop: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
-                          Deliverable Folder / Link
+                    <div>
+                      {selectedTask.description ? (
+                        <div style={{ fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere', background: '#fff', padding: 10, borderRadius: 6, border: '1px solid var(--border)' }}>
+                          {selectedTask.description}
                         </div>
-                        <a
-                          href={selectedTask.deliverable_link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn btn-outline btn-xs"
-                          style={{ color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        >
-                          <ExternalLink size={12} /> Open Deliverable Link
-                        </a>
-                      </div>
-                    )}
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic', padding: '6px 0' }}>
+                          No instructions provided yet.
+                        </div>
+                      )}
+
+                      {selectedTask.deliverable_link && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                            Deliverable Folder / Link
+                          </div>
+                          <a
+                            href={selectedTask.deliverable_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-outline btn-xs"
+                            style={{ color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          >
+                            <ExternalLink size={12} /> Open Deliverable Link
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                </>
+              )}
 
               {/* POST PROGRESS UPDATE FORM */}
               <form onSubmit={handlePostDailyUpdate} style={{ background: '#F8FAFC', padding: 14, borderRadius: 8, border: '1px solid #E2E8F0' }}>

@@ -7,6 +7,11 @@ export const metadata: Metadata = {
     default: 'Adonix CRM',
   },
   description: 'Meta Ads CRM & Quotation/Invoicing Platform by Adonix',
+  icons: {
+    icon: '/Adonix X Logo.jpeg',
+    shortcut: '/Adonix X Logo.jpeg',
+    apple: '/Adonix X Logo.jpeg',
+  },
 }
 
 export default function RootLayout({

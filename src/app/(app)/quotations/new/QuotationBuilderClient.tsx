@@ -44,7 +44,7 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
   const [currency, setCurrency] = useState('SAR')
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState('')
-  const [taxPercent, setTaxPercent] = useState(5)
+  const [taxPercent, setTaxPercent] = useState(15)
   const DEFAULT_TERMS = `50% Advance Payment – Due upon acceptance of the proposal and before project commencement.
 30% Milestone Payment – Due upon completion of the first review/demo and client approval to proceed.
 20% Final Payment – Due upon final delivery of the project and prior to deployment, handover, or transfer of source files.

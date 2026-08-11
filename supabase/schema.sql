@@ -87,7 +87,7 @@ on conflict (key) do nothing;
 create table if not exists import_batches (
   id uuid primary key default gen_random_uuid(),
   file_name text not null,
-  uploaded_by uuid references profiles(id),
+  uploaded_by uuid references profiles(id) on delete set null,
   total_rows int,
   success_count int,
   error_count int,
@@ -123,7 +123,7 @@ create table if not exists leads (
   raw_payload jsonb,
 
   stage_id uuid references lead_stages(id) not null,
-  assigned_agent_id uuid references profiles(id),
+  assigned_agent_id uuid references profiles(id) on delete set null,
 
   lead_score int default 0,
   is_duplicate boolean default false,
@@ -152,7 +152,7 @@ create table if not exists lead_stage_history (
   lead_id uuid references leads(id) on delete cascade,
   from_stage_id uuid references lead_stages(id),
   to_stage_id uuid references lead_stages(id) not null,
-  changed_by uuid references profiles(id),
+  changed_by uuid references profiles(id) on delete set null,
   changed_at timestamptz not null default now()
 );
 
@@ -164,7 +164,7 @@ create index if not exists idx_stage_history_lead on lead_stage_history(lead_id)
 create table if not exists lead_notes (
   id uuid primary key default gen_random_uuid(),
   lead_id uuid references leads(id) on delete cascade,
-  author_id uuid references profiles(id),
+  author_id uuid references profiles(id) on delete set null,
   body text not null,
   created_at timestamptz not null default now()
 );
@@ -174,7 +174,7 @@ create index if not exists idx_notes_lead on lead_notes(lead_id);
 create table if not exists lead_followups (
   id uuid primary key default gen_random_uuid(),
   lead_id uuid references leads(id) on delete cascade,
-  agent_id uuid references profiles(id),
+  agent_id uuid references profiles(id) on delete set null,
   scheduled_at timestamptz not null,
   note text,
   is_completed boolean not null default false,
@@ -196,7 +196,7 @@ create table if not exists lead_activities (
   activity_type text not null,
   -- Types: LEAD_CREATED, STAGE_CHANGE, NOTE_ADDED, FOLLOWUP_SCHEDULED,
   --        FOLLOWUP_COMPLETED, QUOTE_SENT, INVOICE_SENT, ASSIGNED, PAYMENT_RECORDED
-  performed_by uuid references profiles(id),
+  performed_by uuid references profiles(id) on delete set null,
   metadata jsonb,
   created_at timestamptz not null default now()
 );
@@ -230,13 +230,14 @@ create table if not exists quotations (
   issue_date date not null default current_date,
   valid_until date,
   subtotal numeric(12,2) not null default 0,
-  tax_percent numeric(5,2) not null default 0,
+  tax_percent numeric(5,2) not null default 15.00,
   tax_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
   terms text,
   notes text,
   pdf_url text,
-  created_by uuid references profiles(id),
+  created_by uuid references profiles(id) on delete set null,
+  office_location text default 'KSA',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -265,14 +266,15 @@ create table if not exists invoices (
   issue_date date not null default current_date,
   due_date date,
   subtotal numeric(12,2) not null default 0,
-  tax_percent numeric(5,2) not null default 0,
+  tax_percent numeric(5,2) not null default 15.00,
   tax_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
   amount_paid numeric(12,2) not null default 0,
   terms text,
   notes text,
   pdf_url text,
-  created_by uuid references profiles(id),
+  created_by uuid references profiles(id) on delete set null,
+  office_location text default 'KSA',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -297,7 +299,7 @@ create table if not exists payments (
   method text check (method in ('CASH','BANK_TRANSFER','CARD','CHEQUE','OTHER')),
   paid_at date not null default current_date,
   reference_note text,
-  recorded_by uuid references profiles(id),
+  recorded_by uuid references profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
 

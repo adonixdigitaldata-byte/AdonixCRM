@@ -42,7 +42,7 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
   const [currency, setCurrency] = useState('SAR')
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10))
   const [dueDate, setDueDate] = useState('')
-  const [taxPercent, setTaxPercent] = useState(5)
+  const [taxPercent, setTaxPercent] = useState(15)
 
   // Notes & Terms
   const [notes, setNotes] = useState('')

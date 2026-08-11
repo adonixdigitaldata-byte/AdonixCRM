@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { ArrowLeft, Plus, CheckCircle, Printer, Edit2, Trash2, XCircle, RotateCcw, Send, AlertTriangle, X, MapPin, Phone, Globe } from 'lucide-react'
 
 import type { Invoice, Profile, Payment } from '@/types/database'
+import { OFFICE_LOCATIONS, type OfficeLocationKey } from '@/lib/constants/officeLocations'
 
 interface Props {
   invoice: Invoice & { client: any; items: any[] }
@@ -66,6 +67,9 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
   const [showCr, setShowCr] = useState(true)
+  const [officeLocation, setOfficeLocation] = useState<OfficeLocationKey>(
+    (initial.office_location as OfficeLocationKey) || 'KSA'
+  )
 
   // Payment form states
   const [payAmount, setPayAmount] = useState('')
@@ -311,6 +315,23 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
           </span>
         </div>
         <div className="flex gap-2 no-print flex-wrap items-center">
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginRight: 8 }}>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Office:</span>
+            <select
+              className="form-select"
+              value={officeLocation}
+              onChange={(e) => {
+                const newLoc = e.target.value as OfficeLocationKey
+                setOfficeLocation(newLoc)
+                supabase.from('invoices').update({ office_location: newLoc }).eq('id', invoice.id).then()
+              }}
+              style={{ padding: '3px 8px', fontSize: 12, height: 30, cursor: 'pointer', borderRadius: 6 }}
+            >
+              <option value="KSA">🇸🇦 Saudi Arabia (Jeddah)</option>
+              <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
+            </select>
+          </div>
+
           <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
             <input
               type="checkbox"
@@ -374,58 +395,67 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
 
       <div className="page-body">
         {/* Document Banner with Company Logo & Brand Details */}
-        <div className="card doc-banner-card" style={{ padding: '16px 20px', marginBottom: 16, maxWidth: 900, width: '100%', boxSizing: 'border-box' }}>
-          <div className="doc-banner-top" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%' }}>
-            <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
-              <div>
-                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Adonix {showCr && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>(C.R. 4030138081)</span>}
+        {(() => {
+          const currentOffice = OFFICE_LOCATIONS[officeLocation] || OFFICE_LOCATIONS.KSA
+          return (
+            <div className="card doc-banner-card" style={{ padding: '16px 20px', marginBottom: 16, maxWidth: 900, width: '100%', boxSizing: 'border-box' }}>
+              <div className="doc-banner-top" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%' }}>
+                <div className="flex items-center gap-3">
+                  <img src="/logo.png" alt="Adonix Logo" style={{ height: 38, width: 'auto', objectFit: 'contain' }} />
+                  <div>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      Adonix {showCr && currentOffice.crNumber && (
+                        <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)' }}>
+                          ({currentOffice.crNumber})
+                        </span>
+                      )}
+                    </span>
+                    <p className="text-meta" style={{ margin: 0 }}>VAT Invoice &amp; Billing Statement</p>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{invoice.invoice_number}</span>
+                  <p className="text-meta" style={{ margin: 0 }}>Currency: {curr}</p>
+                </div>
+              </div>
+
+              {/* Compact Brand Header Sub-bar */}
+              <div className="doc-banner-brand-bar">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  <MapPin size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                  <span>{currentOffice.address}</span>
+                  <a
+                    href={currentOffice.mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none', marginLeft: 2 }}
+                  >
+                    (View Map)
+                  </a>
                 </span>
-                <p className="text-meta" style={{ margin: 0 }}>VAT Invoice &amp; Billing Statement</p>
+
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Phone size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    <span>{currentOffice.phone}</span>
+                  </span>
+                  <span>·</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Globe size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    <a
+                      href="https://adonixdigital.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}
+                    >
+                      adonixdigital.com
+                    </a>
+                  </span>
+                </span>
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{invoice.invoice_number}</span>
-              <p className="text-meta" style={{ margin: 0 }}>Currency: {curr}</p>
-            </div>
-          </div>
-
-          {/* Compact Brand Header Sub-bar */}
-          <div className="doc-banner-brand-bar">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-              <MapPin size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-              <span>Office #602, Matbouli Plaza, Fayd Al Samaa St, Jeddah, KSA</span>
-              <a
-                href="https://maps.app.goo.gl/vbcPiZJTmJ1hvqbv9"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none', marginLeft: 2 }}
-              >
-                (View Map)
-              </a>
-            </span>
-
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Phone size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                <span>+966 53 849 8580</span>
-              </span>
-              <span>·</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Globe size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                <a
-                  href="https://adonixdigital.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}
-                >
-                  adonixdigital.com
-                </a>
-              </span>
-            </span>
-          </div>
-        </div>
+          )
+        })()}
 
         <div className="rg-doc-detail">
 

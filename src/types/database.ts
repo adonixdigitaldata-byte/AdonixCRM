@@ -212,6 +212,7 @@ export interface Quotation {
   notes: string | null
   pdf_url: string | null
   created_by: string | null
+  office_location?: 'KSA' | 'HYDERABAD' | null
   created_at: string
   updated_at: string
   client?: Client
@@ -247,6 +248,7 @@ export interface Invoice {
   terms?: string | null
   pdf_url: string | null
   created_by: string | null
+  office_location?: 'KSA' | 'HYDERABAD' | null
   created_at: string
   updated_at: string
   client?: Client
