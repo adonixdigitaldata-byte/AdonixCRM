@@ -61,17 +61,27 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
   // Security check for CLIENT role users: ensure they can only view their own quotations
   if (profile?.role === 'CLIENT') {
     let userClientId = profile.client_id
+    const serviceSupabase = await createServiceClient()
+
     if (!userClientId && profile.email) {
-      const serviceSupabase = await createServiceClient()
       const { data: matchedClient } = await serviceSupabase
         .from('clients')
         .select('id')
-        .eq('email', profile.email)
+        .ilike('email', profile.email.trim())
         .maybeSingle()
       if (matchedClient) userClientId = matchedClient.id
     }
+
     if (userClientId && quotation.client_id && quotation.client_id !== userClientId) {
-      notFound()
+      const { data: qClient } = await serviceSupabase
+        .from('clients')
+        .select('email')
+        .eq('id', quotation.client_id)
+        .maybeSingle()
+
+      if (!qClient || !profile.email || qClient.email.toLowerCase() !== profile.email.trim().toLowerCase()) {
+        notFound()
+      }
     }
   }
 

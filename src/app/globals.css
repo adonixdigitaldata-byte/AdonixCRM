@@ -304,6 +304,7 @@ textarea {
     left: 0 !important;
     padding: 0 12px !important;
   }
+
   .client-detail-footer-text {
     display: none !important;
   }
@@ -806,10 +807,12 @@ textarea.form-input {
   width: 5px;
   display: block;
 }
+
 .kanban-cards::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 4px;
 }
+
 .kanban-cards::-webkit-scrollbar-thumb {
   background: var(--border-hover);
   border-radius: 4px;
@@ -2038,11 +2041,36 @@ textarea.form-input {
     width: 100% !important;
     max-width: none !important;
   }
+
+  /* --- Document banner styling on mobile --- */
+  .doc-banner-top {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .doc-banner-top > div:last-child {
+    text-align: left !important;
+    width: 100% !important;
+  }
+
+  .doc-banner-brand-bar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .doc-banner-brand-bar > span {
+    flex-wrap: wrap !important;
+    flex-shrink: 1 !important;
+    width: 100% !important;
+  }
 }
 
 
 
 @media screen and (max-width: 480px) {
+
   /* --- Extra small phones: single column for all grids --- */
   .grid-cols-4,
   .grid-cols-3,
@@ -2119,7 +2147,7 @@ textarea.form-input {
 }
 
 /* Prevent grid items from overflowing and stretching layout columns */
-.rg-lead-detail > div {
+.rg-lead-detail>div {
   min-width: 0;
 }
 
@@ -2142,6 +2170,7 @@ textarea.form-input {
 .show-mobile {
   display: none !important;
 }
+
 .hide-mobile {
   display: block !important;
 }
@@ -2150,10 +2179,12 @@ textarea.form-input {
   .show-mobile {
     display: flex !important;
   }
+
   .show-mobile.flex-col {
     display: flex !important;
     flex-direction: column !important;
   }
+
   .hide-mobile {
     display: none !important;
   }
@@ -2176,27 +2207,27 @@ textarea.form-input {
     gap: 16px !important;
   }
 
-  .lead-detail-header-card > .flex:last-child {
+  .lead-detail-header-card>.flex:last-child {
     width: 100% !important;
     display: flex !important;
     gap: 8px !important;
   }
 
-  .lead-detail-header-card > .flex:last-child .btn {
+  .lead-detail-header-card>.flex:last-child .btn {
     flex: 1 !important;
     justify-content: center !important;
   }
 
   /* --- Page header action buttons wrapping --- */
-  .page-header > div:last-child {
+  .page-header>div:last-child {
     display: flex !important;
     flex-wrap: wrap !important;
     gap: 8px !important;
     width: 100% !important;
   }
 
-  .page-header > div:last-child .btn,
-  .page-header > div:last-child a.btn {
+  .page-header>div:last-child .btn,
+  .page-header>div:last-child a.btn {
     flex: 1 !important;
     min-width: 120px !important;
     justify-content: center !important;
@@ -2253,7 +2284,8 @@ textarea.form-input {
 .fixed-bottom-bar {
   position: fixed;
   bottom: 0;
-  left: 260px; /* Offset for desktop sidebar width */
+  left: 260px;
+  /* Offset for desktop sidebar width */
   right: 0;
   height: 64px;
   background: var(--surface);
@@ -2267,18 +2299,19 @@ textarea.form-input {
 
 @media screen and (max-width: 768px) {
   .fixed-bottom-bar {
-    left: 0 !important; /* Full width on mobile screens */
+    left: 0 !important;
+    /* Full width on mobile screens */
     padding: 0 16px !important;
   }
 
-  .client-profile-header > div:last-child {
+  .client-profile-header>div:last-child {
     display: flex !important;
     flex-wrap: nowrap !important;
     width: auto !important;
     gap: 12px !important;
   }
 
-  .client-profile-header > div:last-child .btn {
+  .client-profile-header>div:last-child .btn {
     flex: none !important;
     min-width: auto !important;
     width: 32px !important;

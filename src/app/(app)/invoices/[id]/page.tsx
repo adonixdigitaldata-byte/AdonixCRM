@@ -67,17 +67,28 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   // Security check for CLIENT role users: ensure they can only view their own invoices
   if (profile?.role === 'CLIENT') {
     let userClientId = profile.client_id
+    const serviceSupabase = await createServiceClient()
+
     if (!userClientId && profile.email) {
-      const serviceSupabase = await createServiceClient()
       const { data: matchedClient } = await serviceSupabase
         .from('clients')
         .select('id')
-        .eq('email', profile.email)
+        .ilike('email', profile.email.trim())
         .maybeSingle()
       if (matchedClient) userClientId = matchedClient.id
     }
+
     if (userClientId && invoice.client_id && invoice.client_id !== userClientId) {
-      notFound()
+      // Check if invoice belongs to a client record with matching email
+      const { data: invClient } = await serviceSupabase
+        .from('clients')
+        .select('email')
+        .eq('id', invoice.client_id)
+        .maybeSingle()
+
+      if (!invClient || !profile.email || invClient.email.toLowerCase() !== profile.email.trim().toLowerCase()) {
+        notFound()
+      }
     }
   }
 

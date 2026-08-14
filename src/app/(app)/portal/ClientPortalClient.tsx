@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import AppLoading from '../loading'
 import { format } from 'date-fns'
 import {
   LayoutDashboard,
@@ -147,6 +148,13 @@ export default function ClientPortalClient({
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
+  const [isPending, startTransition] = useTransition()
+
+  const navigate = (section: TabType) => {
+    startTransition(() => {
+      router.push(`/portal?section=${section}`)
+    })
+  }
 
   // Read section reactively from URL query params (defaults to overview)
   const sectionParam = (searchParams.get('section') as TabType) || 'overview'
@@ -422,6 +430,10 @@ export default function ClientPortalClient({
 
       {/* Main Content Area */}
       <main style={{ maxWidth: 1200, margin: '24px auto', padding: '0 16px' }}>
+        {isPending ? (
+          <AppLoading />
+        ) : (
+          <>
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -538,7 +550,7 @@ export default function ClientPortalClient({
                     <span className="text-section-header">Project Deliverables &amp; Tasks</span>
                   </div>
                   <button
-                    onClick={() => router.push('/portal?section=tasks')}
+                    onClick={() => navigate('tasks')}
                     className="btn btn-ghost btn-xs"
                     style={{ color: 'var(--accent)', fontSize: 12 }}
                   >
@@ -627,7 +639,7 @@ export default function ClientPortalClient({
                     <span className="text-section-header">Monthly Reports &amp; Assets</span>
                   </div>
                   <button
-                    onClick={() => router.push('/portal?section=reports')}
+                    onClick={() => navigate('reports')}
                     className="btn btn-ghost btn-xs"
                     style={{ color: 'var(--accent)', fontSize: 12 }}
                   >
@@ -694,7 +706,7 @@ export default function ClientPortalClient({
                     </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 10 }}>
                       <button
-                        onClick={() => router.push('/portal?section=company')}
+                        onClick={() => navigate('company')}
                         className="btn btn-outline btn-xs"
                         style={{ width: '100%', justifyContent: 'center', color: 'var(--accent)', fontWeight: 600, display: 'inline-flex', gap: 6 }}
                       >
@@ -1923,47 +1935,49 @@ export default function ClientPortalClient({
             </div>
           </div>
         )}
-      </main>
+      </>
+    )}
+  </main>
 
       {/* Mobile Bottom Navigation Bar (Visible on mobile screens) */}
       <div className="client-mobile-bottom-nav">
         <button
-          onClick={() => router.push('/portal?section=overview')}
+          onClick={() => navigate('overview')}
           className={`bottom-nav-item ${activeTab === 'overview' ? 'active' : ''}`}
         >
           <LayoutDashboard size={18} />
           <span>Overview</span>
         </button>
         <button
-          onClick={() => router.push('/portal?section=finance')}
+          onClick={() => navigate('finance')}
           className={`bottom-nav-item ${activeTab === 'finance' ? 'active' : ''}`}
         >
           <Receipt size={18} />
           <span>Invoices</span>
         </button>
         <button
-          onClick={() => router.push('/portal?section=reports')}
+          onClick={() => navigate('reports')}
           className={`bottom-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
         >
           <FileText size={18} />
           <span>Reports</span>
         </button>
         <button
-          onClick={() => router.push('/portal?section=tasks')}
+          onClick={() => navigate('tasks')}
           className={`bottom-nav-item ${activeTab === 'tasks' ? 'active' : ''}`}
         >
           <CheckSquare size={18} />
           <span>Tasks</span>
         </button>
         <button
-          onClick={() => router.push('/portal?section=company')}
+          onClick={() => navigate('company')}
           className={`bottom-nav-item ${activeTab === 'company' ? 'active' : ''}`}
         >
           <Share2 size={18} />
           <span>Assets</span>
         </button>
         <button
-          onClick={() => router.push('/portal?section=support')}
+          onClick={() => navigate('support')}
           className={`bottom-nav-item ${activeTab === 'support' ? 'active' : ''}`}
         >
           <Send size={18} />

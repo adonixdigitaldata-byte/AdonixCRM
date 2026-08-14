@@ -72,7 +72,7 @@ function LoginForm() {
     if (authData?.user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('is_active')
+        .select('is_active, role')
         .eq('id', authData.user.id)
         .single()
 
@@ -82,11 +82,25 @@ function LoginForm() {
         setLoading(false)
         return
       }
-    }
 
-    const targetUrl = redirectTo.startsWith('/') ? redirectTo : '/dashboard'
-    router.push(targetUrl)
-    router.refresh()
+      let targetUrl = '/dashboard'
+      if (profile?.role === 'CLIENT') {
+        targetUrl = '/portal'
+      } else if (profile?.role === 'EMPLOYEE') {
+        targetUrl = '/tasks?tab=MY'
+      } else {
+        // ADMIN, ACCOUNT_MANAGER, AGENT: if previous redirect target was /portal, override to /dashboard
+        if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('/portal')) {
+          targetUrl = redirectTo
+        } else {
+          targetUrl = '/dashboard'
+        }
+      }
+
+      router.push(targetUrl)
+      router.refresh()
+      return
+    }
   }
 
   return (

@@ -33,30 +33,29 @@ export default async function ClientPortalPage({ searchParams }: PageProps) {
   const isAdminOrManager =
     currentProfile.role === 'ADMIN' || currentProfile.role === 'ACCOUNT_MANAGER'
 
-  if (asClient && isAdminOrManager) {
-    clientId = asClient
-  } else if (currentProfile.client_id) {
-    clientId = currentProfile.client_id
-  } else if (currentProfile.role === 'CLIENT') {
-    // Fallback search by email
-    const { data: matchedClient } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('email', currentProfile.email)
-      .maybeSingle()
-    if (matchedClient) {
-      clientId = matchedClient.id
+  if (currentProfile.role !== 'CLIENT') {
+    // Non-client staff visiting /portal
+    if (asClient && isAdminOrManager) {
+      clientId = asClient
+    } else if (currentProfile.role === 'EMPLOYEE') {
+      redirect('/tasks?tab=MY')
+    } else {
+      redirect('/dashboard')
     }
-  } else if (isAdminOrManager) {
-    // Admin visiting /portal directly without asClient: pick the first client
-    const { data: firstClient } = await supabase
-      .from('clients')
-      .select('id')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (firstClient) {
-      clientId = firstClient.id
+  } else {
+    // Client role user
+    if (currentProfile.client_id) {
+      clientId = currentProfile.client_id
+    } else {
+      // Fallback search by email
+      const { data: matchedClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('email', currentProfile.email)
+        .maybeSingle()
+      if (matchedClient) {
+        clientId = matchedClient.id
+      }
     }
   }
 
