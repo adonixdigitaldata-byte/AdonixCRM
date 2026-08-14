@@ -13,9 +13,13 @@ export default async function DashboardPage() {
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
   // Technical Employees / Work Specialists land directly on /tasks?tab=MY
+  // CLIENT role users land directly on /portal
   // ADMIN, ACCOUNT_MANAGER, and AGENT (Sales Agents) access the Dashboard
   if (profile && profile.role === 'EMPLOYEE') {
     redirect('/tasks?tab=MY')
+  }
+  if (profile && profile.role === 'CLIENT') {
+    redirect('/portal')
   }
 
   // ─── Fire all independent queries IN PARALLEL ─────────────────────
@@ -66,11 +70,11 @@ export default async function DashboardPage() {
   // ─── Admin-only: Agent performance data (parallel) ────────────────
   let agentPerf: any[] = []
 
-  if (isAdmin) {
+  if (isAdmin || profile?.role === 'ACCOUNT_MANAGER') {
     const { data: agents } = await supabase
       .from('profiles')
       .select('id, name, last_seen_at')
-      .eq('role', 'AGENT')
+      .in('role', ['AGENT', 'ACCOUNT_MANAGER'])
       .eq('is_active', true)
 
     if (agents && agents.length > 0) {

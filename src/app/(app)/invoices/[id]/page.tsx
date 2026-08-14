@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import InvoiceDetailClient from './InvoiceDetailClient'
@@ -6,11 +6,21 @@ import InvoiceDetailClient from './InvoiceDetailClient'
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const supabase = await createClient()
-  const { data: invoice } = await supabase
+  let { data: invoice } = await supabase
     .from('invoices')
     .select('invoice_number, client:clients(name, company)')
     .eq('id', id)
     .single()
+
+  if (!invoice) {
+    const serviceSupabase = await createServiceClient()
+    const { data: sInvoice } = await serviceSupabase
+      .from('invoices')
+      .select('invoice_number, client:clients(name, company)')
+      .eq('id', id)
+      .single()
+    invoice = sInvoice
+  }
 
   const clientName = (invoice?.client as any)?.name || (invoice?.client as any)?.company
   const title = clientName ? `Invoice — Adonix for ${clientName}` : 'Invoice'
@@ -23,7 +33,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [
+  let [
     { data: profile },
     { data: invoice },
     { data: items },
@@ -35,7 +45,41 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     supabase.from('payments').select('*').eq('invoice_id', id).order('paid_at', { ascending: false }),
   ])
 
+  if (!invoice) {
+    const serviceSupabase = await createServiceClient()
+    const [
+      { data: sInvoice },
+      { data: sItems },
+      { data: sPayments },
+    ] = await Promise.all([
+      serviceSupabase.from('invoices').select('*, client:clients(*)').eq('id', id).single(),
+      serviceSupabase.from('invoice_items').select('*').eq('invoice_id', id).order('sort_order'),
+      serviceSupabase.from('payments').select('*').eq('invoice_id', id).order('paid_at', { ascending: false }),
+    ])
+
+    invoice = sInvoice
+    items = sItems
+    payments = sPayments
+  }
+
   if (!invoice) notFound()
+
+  // Security check for CLIENT role users: ensure they can only view their own invoices
+  if (profile?.role === 'CLIENT') {
+    let userClientId = profile.client_id
+    if (!userClientId && profile.email) {
+      const serviceSupabase = await createServiceClient()
+      const { data: matchedClient } = await serviceSupabase
+        .from('clients')
+        .select('id')
+        .eq('email', profile.email)
+        .maybeSingle()
+      if (matchedClient) userClientId = matchedClient.id
+    }
+    if (userClientId && invoice.client_id && invoice.client_id !== userClientId) {
+      notFound()
+    }
+  }
 
   const invoiceWithItems = {
     ...invoice,

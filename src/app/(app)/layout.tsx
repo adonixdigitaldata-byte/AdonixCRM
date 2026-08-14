@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import Sidebar from '@/components/layout/Sidebar'
 import ActivityTracker from '@/components/layout/ActivityTracker'
 import type { Profile } from '@/types/database'
@@ -32,7 +33,9 @@ export default async function AppLayout({
   return (
     <div className="app-shell">
       <ActivityTracker userId={profile.id} />
-      <Sidebar profile={profile as Profile} />
+      <Suspense fallback={<div style={{ width: 'var(--sidebar-width)' }} />}>
+        <Sidebar profile={profile as Profile} />
+      </Suspense>
       <main className="main-content">{children}</main>
     </div>
   )

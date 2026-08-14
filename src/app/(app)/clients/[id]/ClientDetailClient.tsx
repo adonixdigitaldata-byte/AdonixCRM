@@ -36,6 +36,7 @@ import {
   MapPin,
   Copy,
   Check,
+  Send,
 } from 'lucide-react'
 
 interface Props {
@@ -270,6 +271,47 @@ export default function ClientDetailClient({ client, profiles, tasks = [], invoi
 
   const [taskSearch, setTaskSearch] = useState('')
   const [taskPage, setTaskPage] = useState(1)
+
+  // Client Portal Reset Password Link Sender State
+  const [accessLoading, setAccessLoading] = useState(false)
+  const [accessSuccess, setAccessSuccess] = useState('')
+  const [accessError, setAccessError] = useState('')
+
+  async function handleSendPasswordResetLink() {
+    const targetEmail = clientEmail || client.email
+    if (!targetEmail || !targetEmail.trim()) {
+      setAccessError('Client email is required to send password reset link')
+      return
+    }
+    setAccessLoading(true)
+    setAccessError('')
+    setAccessSuccess('')
+
+    try {
+      const res = await fetch('/api/agents/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: targetEmail.trim(),
+          name: clientName || client.name,
+          mode: 'forgot',
+          role: 'CLIENT',
+          clientId: client.id,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send password reset link')
+      }
+
+      setAccessSuccess(`Password reset email link sent to ${targetEmail}!`)
+    } catch (e: any) {
+      setAccessError(e.message || 'Failed to send password reset link')
+    } finally {
+      setAccessLoading(false)
+    }
+  }
 
   const itemsPerPage = 5
 
@@ -885,10 +927,10 @@ export default function ClientDetailClient({ client, profiles, tasks = [], invoi
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover, #F8FAFC)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
-                        <div style={{ flex: '1 1 240px' }}>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal', minWidth: 0 }}>
                             {t.title}
-                            <ExternalLink size={11} style={{ color: 'var(--text-tertiary)' }} />
+                            <ExternalLink size={11} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: '#EFF6FF', color: '#2563EB' }}>
@@ -2073,6 +2115,43 @@ export default function ClientDetailClient({ client, profiles, tasks = [], invoi
           {/* Sidebar Column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             
+            {/* Client Portal Access & Password Reset Card */}
+            <div className="card">
+              <div className="card-header flex items-center justify-between" style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                <div className="flex items-center gap-2">
+                  <Shield size={16} style={{ color: 'var(--accent)' }} />
+                  <span className="text-section-header">Client Portal Access</span>
+                </div>
+              </div>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
+                  Client portal accounts are managed via invitations. Use the button below to send a password reset link to this client's email address.
+                </p>
+
+                {accessSuccess && (
+                  <div style={{ padding: '8px 10px', background: 'var(--success-light)', border: '1px solid var(--success)', borderRadius: 'var(--radius-sm)', color: 'var(--success)', fontSize: 12 }}>
+                    ✓ {accessSuccess}
+                  </div>
+                )}
+                {accessError && (
+                  <div style={{ padding: '8px 10px', background: '#FEF2F2', border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', color: 'var(--danger)', fontSize: 12 }}>
+                    ✕ {accessError}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={handleSendPasswordResetLink}
+                  disabled={accessLoading}
+                  style={{ width: '100%', justifyContent: 'center', fontWeight: 600, display: 'inline-flex', gap: 6 }}
+                >
+                  <Send size={13} />
+                  {accessLoading ? 'Sending Reset Link...' : 'Send Password Reset Email'}
+                </button>
+              </div>
+            </div>
+
             {/* Client Basic Details Form (New Feature to show/edit Name, Email, Phone, Company, Address) */}
             <div className="card">
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -12,6 +12,7 @@ export default async function CampaignsPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'CLIENT') redirect('/portal')
   if (profile?.role !== 'ADMIN') redirect('/leads')
 
   const { data: campaigns } = await supabase

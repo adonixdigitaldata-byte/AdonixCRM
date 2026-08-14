@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types/database'
 import {
@@ -19,6 +19,8 @@ import {
   X,
   CheckSquare,
   UserCheck,
+  Send,
+  Share2,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -102,9 +104,24 @@ const employeeNav = [
   },
 ]
 
+const clientNav = [
+  {
+    section: 'Client Portal',
+    items: [
+      { href: '/portal?section=overview', label: 'Overview', icon: LayoutDashboard },
+      { href: '/portal?section=finance', label: 'Invoices & Quotes', icon: Receipt },
+      { href: '/portal?section=reports', label: 'Reports', icon: FileText },
+      { href: '/portal?section=tasks', label: 'Deliverables & Tasks', icon: CheckSquare },
+      { href: '/portal?section=company', label: 'Social & Assets', icon: Share2 },
+      { href: '/portal?section=support', label: 'Message Manager', icon: Send },
+    ],
+  },
+]
+
 export default function Sidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [mobileOpen, setMobileOpen] = useState(false)
   const nav =
     profile.role === 'ADMIN'
@@ -113,6 +130,8 @@ export default function Sidebar({ profile }: SidebarProps) {
       ? accountManagerNav
       : profile.role === 'EMPLOYEE'
       ? employeeNav
+      : profile.role === 'CLIENT'
+      ? clientNav
       : agentNav
 
   // Close drawer on route change
@@ -138,6 +157,11 @@ export default function Sidebar({ profile }: SidebarProps) {
   }
 
   function isActive(href: string) {
+    if (profile.role === 'CLIENT') {
+      const activeSec = searchParams?.get('section') || 'overview'
+      const hrefSec = new URLSearchParams(href.split('?')[1] || '').get('section') || 'overview'
+      return pathname.startsWith('/portal') && activeSec === hrefSec
+    }
     if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
   }
@@ -259,6 +283,8 @@ export default function Sidebar({ profile }: SidebarProps) {
                   ? 'Account Manager'
                   : profile.role === 'AGENT'
                   ? 'Sales Agent'
+                  : profile.role === 'CLIENT'
+                  ? 'Client Portal'
                   : profile.specialization || 'Employee'}
               </div>
             </div>

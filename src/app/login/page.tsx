@@ -120,7 +120,7 @@ function LoginForm() {
               Adonix CRM
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Meta Ads & Leads Platform
+              Client &amp; Staff Portal
             </div>
           </div>
         </div>
@@ -169,7 +169,7 @@ function LoginForm() {
                     id="email"
                     type="email"
                     className={`form-input ${error ? 'error' : ''}`}
-                    placeholder="you@adonix.com"
+                    placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -282,7 +282,7 @@ function LoginForm() {
             textAlign: 'center',
           }}
         >
-          Internal platform — contact your admin for access
+          Adonix Digital Platform — Secure Sign In
         </p>
       </div>
     </div>

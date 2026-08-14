@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type UserRole = 'ADMIN' | 'ACCOUNT_MANAGER' | 'AGENT' | 'EMPLOYEE'
+export type UserRole = 'ADMIN' | 'ACCOUNT_MANAGER' | 'AGENT' | 'EMPLOYEE' | 'CLIENT'
 export type EmployeeSpecialization = 'WEBSITE' | 'SOCIAL_MEDIA' | 'ADS' | 'GMB' | 'VIDEO_AI' | 'DESIGN' | 'SEO' | 'OTHER'
 export type WorkStatus = 'AVAILABLE' | 'BUSY' | 'ON_LEAVE'
 export type TaskCategory = 'WEBSITE' | 'SOCIAL_MEDIA' | 'ADS' | 'GMB' | 'VIDEO_AI' | 'DESIGN' | 'SEO' | 'SALES_TASK' | 'FINANCE_TASK' | 'OTHER'
@@ -37,6 +37,7 @@ export interface Profile {
   name: string
   email: string
   role: UserRole
+  client_id?: string | null
   specialization?: string | null
   work_status?: WorkStatus
   is_active: boolean
@@ -177,6 +178,7 @@ export interface ImportBatch {
 export interface Client {
   id: string
   lead_id: string | null
+  profile_id?: string | null
   name: string
   company: string | null
   email: string | null

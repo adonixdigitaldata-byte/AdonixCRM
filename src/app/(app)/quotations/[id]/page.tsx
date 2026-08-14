@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import QuotationDetailClient from './QuotationDetailClient'
@@ -6,11 +6,21 @@ import QuotationDetailClient from './QuotationDetailClient'
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const supabase = await createClient()
-  const { data: quotation } = await supabase
+  let { data: quotation } = await supabase
     .from('quotations')
     .select('quote_number, client:clients(name, company)')
     .eq('id', id)
     .single()
+
+  if (!quotation) {
+    const serviceSupabase = await createServiceClient()
+    const { data: sQuotation } = await serviceSupabase
+      .from('quotations')
+      .select('quote_number, client:clients(name, company)')
+      .eq('id', id)
+      .single()
+    quotation = sQuotation
+  }
 
   const clientName = (quotation?.client as any)?.name || (quotation?.client as any)?.company
   const title = clientName ? `Quotation — Adonix for ${clientName}` : 'Quotation'
@@ -23,7 +33,7 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [
+  let [
     { data: profile },
     { data: quotation },
     { data: items },
@@ -33,7 +43,37 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
     supabase.from('quotation_items').select('*').eq('quotation_id', id).order('sort_order'),
   ])
 
+  if (!quotation) {
+    const serviceSupabase = await createServiceClient()
+    const [
+      { data: sQuotation },
+      { data: sItems },
+    ] = await Promise.all([
+      serviceSupabase.from('quotations').select('*, client:clients(*)').eq('id', id).single(),
+      serviceSupabase.from('quotation_items').select('*').eq('quotation_id', id).order('sort_order'),
+    ])
+    quotation = sQuotation
+    items = sItems
+  }
+
   if (!quotation) notFound()
+
+  // Security check for CLIENT role users: ensure they can only view their own quotations
+  if (profile?.role === 'CLIENT') {
+    let userClientId = profile.client_id
+    if (!userClientId && profile.email) {
+      const serviceSupabase = await createServiceClient()
+      const { data: matchedClient } = await serviceSupabase
+        .from('clients')
+        .select('id')
+        .eq('email', profile.email)
+        .maybeSingle()
+      if (matchedClient) userClientId = matchedClient.id
+    }
+    if (userClientId && quotation.client_id && quotation.client_id !== userClientId) {
+      notFound()
+    }
+  }
 
   const quotationWithItems = {
     ...quotation,

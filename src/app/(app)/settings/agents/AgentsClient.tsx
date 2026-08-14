@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { UserPlus, CheckCircle, XCircle, Clock, Search, ChevronRight, Edit2, Shield, User, Briefcase, X, AlertTriangle } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { Profile, UserRole, EmployeeSpecialization, WorkStatus } from '@/types/database'
+import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
 
 interface EnrichedAgent extends Profile {
   last_sign_in_at?: string | null
@@ -21,6 +22,7 @@ interface Props {
   agents: EnrichedAgent[]
   agentLeadCounts: Record<string, number>
   currentUserId: string
+  clients?: { id: string; name: string; company?: string | null; email?: string | null }[]
 }
 
 const SPECIALIZATIONS: { key: EmployeeSpecialization; label: string }[] = [
@@ -34,7 +36,7 @@ const SPECIALIZATIONS: { key: EmployeeSpecialization; label: string }[] = [
   { key: 'OTHER', label: 'General / Operations' },
 ]
 
-export default function AgentsClient({ agents: initialAgents, agentLeadCounts, currentUserId }: Props) {
+export default function AgentsClient({ agents: initialAgents, agentLeadCounts, currentUserId, clients = [] }: Props) {
   const router = useRouter()
   const [agents, setAgents] = useState<EnrichedAgent[]>(initialAgents)
   const [showInvite, setShowInvite] = useState(false)
@@ -42,6 +44,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
   const [inviteName, setInviteName] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('EMPLOYEE')
   const [inviteSpecialization, setInviteSpecialization] = useState<EmployeeSpecialization>('WEBSITE')
+  const [inviteClientId, setInviteClientId] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteError, setInviteError] = useState('')
   const [inviteSuccess, setInviteSuccess] = useState('')
@@ -51,6 +54,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
 
   // Edit Role & Specialization Modal State
   const [editUser, setEditUser] = useState<EnrichedAgent | null>(null)
+  const [editName, setEditName] = useState<string>('')
   const [editRole, setEditRole] = useState<UserRole>('EMPLOYEE')
   const [editSpecialization, setEditSpecialization] = useState<string>('')
   const [editWorkStatus, setEditWorkStatus] = useState<WorkStatus>('AVAILABLE')
@@ -90,6 +94,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
         name: inviteName.trim(),
         role: inviteRole,
         specialization: inviteRole === 'EMPLOYEE' ? inviteSpecialization : null,
+        clientId: inviteRole === 'CLIENT' ? inviteClientId : null,
       }),
     })
 
@@ -132,7 +137,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
 
   async function handleUpdateRole(e: React.FormEvent) {
     e.preventDefault()
-    if (!editUser || editLoading) return
+    if (!editUser || !editName.trim() || editLoading) return
 
     setEditLoading(true)
     try {
@@ -141,6 +146,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: editUser.id,
+          name: editName.trim(),
           role: editRole,
           specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
           work_status: editWorkStatus,
@@ -152,6 +158,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
 
       setAgents(agents.map((a) => a.id === editUser.id ? {
         ...a,
+        name: editName.trim(),
         role: editRole,
         specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
         work_status: editWorkStatus,
@@ -241,10 +248,37 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
             Manage team members, roles (Admins, Account Managers, Technical Employees), and specializations.
           </p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowInvite(true)} style={{ flexShrink: 0 }}>
-          <UserPlus size={14} />
-          Invite Team Member
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              setInviteRole('CLIENT')
+              if (clients.length > 0 && !inviteClientId) {
+                const first = clients[0]
+                setInviteClientId(first.id)
+                setInviteName(first.company || first.name)
+                if (first.email) setInviteEmail(first.email)
+              }
+              setShowInvite(true)
+            }}
+          >
+            <Shield size={14} style={{ color: 'var(--accent)' }} />
+            Invite Client
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              setInviteRole('EMPLOYEE')
+              setShowInvite(true)
+            }}
+          >
+            <UserPlus size={14} />
+            Invite Team Member
+          </button>
+        </div>
       </div>
 
       <div className="page-body">
@@ -274,7 +308,9 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
         {showInvite && (
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
-              <span className="text-section-header">Invite New Team Member</span>
+              <span className="text-section-header">
+                {inviteRole === 'CLIENT' ? 'Invite Client Portal Account' : 'Invite New Team Member'}
+              </span>
             </div>
             <div className="card-body">
               <form onSubmit={handleInvite} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -304,14 +340,43 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                   <select
                     className="form-select"
                     value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as UserRole)}
+                    onChange={(e) => {
+                      const r = e.target.value as UserRole
+                      setInviteRole(r)
+                      if (r === 'CLIENT' && clients.length > 0 && !inviteClientId) {
+                        const first = clients[0]
+                        setInviteClientId(first.id)
+                        if (!inviteName) setInviteName(first.company || first.name)
+                        if (!inviteEmail && first.email) setInviteEmail(first.email)
+                      }
+                    }}
                   >
                     <option value="ACCOUNT_MANAGER">Account Manager</option>
                     <option value="AGENT">Sales Agent</option>
                     <option value="EMPLOYEE">Technical Employee</option>
+                    <option value="CLIENT">Client Portal Access</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>
+
+                {inviteRole === 'CLIENT' && (
+                  <div className="form-group" style={{ flex: '1 1 280px' }}>
+                    <label className="form-label form-label-required">Select Client Profile</label>
+                    <ClientSearchSelect
+                      clients={clients}
+                      selectedClientId={inviteClientId}
+                      onSelectClient={(selected) => {
+                        setInviteClientId(selected.id)
+                        if (selected.id) {
+                          setInviteName(selected.company || selected.name)
+                          if (selected.email) setInviteEmail(selected.email)
+                        }
+                      }}
+                      placeholder="Type name, company or email to search client..."
+                    />
+                  </div>
+                )}
+
                 {inviteRole === 'EMPLOYEE' && (
                   <div className="form-group" style={{ flex: '1 1 180px' }}>
                     <label className="form-label">Department / Specialization</label>
@@ -382,7 +447,22 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                     <tr
                       key={agent.id}
                       className="clickable"
-                      onClick={() => router.push(`/settings/agents/${agent.id}`)}
+                      onClick={() => {
+                        if (agent.role === 'CLIENT') {
+                          const clientId = (agent as any).client_id || clients.find((c) =>
+                            (c.email && agent.email && c.email.toLowerCase() === agent.email.toLowerCase()) ||
+                            (c.name && agent.name && c.name.toLowerCase() === agent.name.toLowerCase())
+                          )?.id
+
+                          if (clientId) {
+                            router.push(`/clients/${clientId}`)
+                            return
+                          }
+                          router.push('/clients')
+                          return
+                        }
+                        router.push(`/settings/agents/${agent.id}`)
+                      }}
                       style={{ cursor: 'pointer' }}
                     >
                       <td>
@@ -404,11 +484,11 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                       {/* Role Pill */}
                       <td>
                         <span className="badge" style={{
-                          background: agent.role === 'ADMIN' ? '#EFF6FF' : agent.role === 'ACCOUNT_MANAGER' ? '#F3E8FF' : agent.role === 'AGENT' ? '#DCFCE7' : '#F4F4F5',
-                          color: agent.role === 'ADMIN' ? '#2563EB' : agent.role === 'ACCOUNT_MANAGER' ? '#7E22CE' : agent.role === 'AGENT' ? '#15803D' : '#52525B',
+                          background: agent.role === 'ADMIN' ? '#EFF6FF' : agent.role === 'ACCOUNT_MANAGER' ? '#F3E8FF' : agent.role === 'AGENT' ? '#DCFCE7' : agent.role === 'CLIENT' ? '#EEF2FF' : '#F4F4F5',
+                          color: agent.role === 'ADMIN' ? '#2563EB' : agent.role === 'ACCOUNT_MANAGER' ? '#7E22CE' : agent.role === 'AGENT' ? '#15803D' : agent.role === 'CLIENT' ? '#4F46E5' : '#52525B',
                           fontSize: 11, fontWeight: 600, border: '1px solid var(--border)',
                         }}>
-                          {agent.role === 'ADMIN' ? 'Admin' : agent.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : agent.role === 'AGENT' ? 'Sales Agent' : 'Employee'}
+                          {agent.role === 'ADMIN' ? 'Admin' : agent.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : agent.role === 'AGENT' ? 'Sales Agent' : agent.role === 'CLIENT' ? 'Client Portal' : 'Employee'}
                         </span>
                       </td>
 
@@ -478,20 +558,23 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                           >
                             {resendingEmails.has(agent.email) ? 'Sending...' : 'Reset Link'}
                           </button>
-                          <button
-                            className="btn btn-outline btn-xs"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEditUser(agent)
-                              setEditRole(agent.role)
-                              setEditSpecialization(agent.specialization || 'WEBSITE')
-                              setEditWorkStatus(agent.work_status || 'AVAILABLE')
-                            }}
-                            title="Edit Role & Specialization"
-                          >
-                            <Edit2 size={12} />
-                            Role
-                          </button>
+                          {agent.role !== 'CLIENT' && (
+                            <button
+                              className="btn btn-outline btn-xs"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditUser(agent)
+                                setEditName(agent.name)
+                                setEditRole(agent.role)
+                                setEditSpecialization(agent.specialization || 'WEBSITE')
+                                setEditWorkStatus(agent.work_status || 'AVAILABLE')
+                              }}
+                              title="Edit Profile & Role"
+                            >
+                              <Edit2 size={12} />
+                              Edit Profile
+                            </button>
+                          )}
                           <button
                             className="btn btn-ghost btn-xs"
                             onClick={(e) => {
@@ -532,13 +615,24 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
         <div className="modal-backdrop" onClick={() => setEditUser(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
-              <span className="text-section-header">Edit Role &amp; Specialization for {editUser.name}</span>
+              <span className="text-section-header">Edit Profile for {editUser.name}</span>
               <button className="btn btn-ghost btn-sm" onClick={() => setEditUser(null)}>
                 <X size={16} />
               </button>
             </div>
             <form onSubmit={handleUpdateRole}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label form-label-required">Full Name</label>
+                  <input
+                    className="form-input"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Enter user full name..."
+                    required
+                  />
+                </div>
+
                 <div className="form-group">
                   <label className="form-label form-label-required">Select Role</label>
                   <select

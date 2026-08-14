@@ -24,6 +24,7 @@ export default async function AgentsPage() {
     { data: completedFus },
     { data: quotations },
     { data: invoices },
+    { data: clientsList },
   ] = await Promise.all([
     supabase
       .from('profiles')
@@ -49,6 +50,10 @@ export default async function AgentsPage() {
     supabase
       .from('invoices')
       .select('id, created_by, total, amount_paid, currency'),
+    supabase
+      .from('clients')
+      .select('id, name, company, email')
+      .order('name', { ascending: true }),
   ])
 
   const authUserMap: Record<string, { last_sign_in_at: string | null; confirmed_at: string | null }> = {}
@@ -121,6 +126,7 @@ export default async function AgentsPage() {
       agents={enrichedAgents as any}
       agentLeadCounts={agentLeadCounts}
       currentUserId={user.id}
+      clients={clientsList ?? []}
     />
   )
 }

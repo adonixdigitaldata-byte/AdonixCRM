@@ -166,11 +166,23 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
     return counts
   }, [tasks])
 
+  const isStaffRestricted = currentProfile?.role === 'EMPLOYEE' || currentProfile?.role === 'AGENT'
+
+  // Accessible tasks pool (scoped for EMPLOYEE and AGENT)
+  const accessibleTasks = useMemo(() => {
+    if (isStaffRestricted) {
+      return tasks.filter(
+        (t) => t.assigned_employee_id === currentProfile?.id || (t as any).created_by === currentProfile?.id
+      )
+    }
+    return tasks
+  }, [tasks, currentProfile?.id, isStaffRestricted])
+
   // Filter tasks logic
   const filteredTasks = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd')
 
-    return tasks.filter((t) => {
+    return accessibleTasks.filter((t) => {
       // Tab filter
       if (activeTab === 'MY' && t.assigned_employee_id !== currentProfile?.id) return false
       if (activeTab === 'ACTIVE' && t.status === 'COMPLETED') return false
@@ -195,7 +207,7 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
 
       return true
     })
-  }, [tasks, activeTab, filterCategory, filterStatus, filterEmployee, search, currentProfile?.id])
+  }, [accessibleTasks, activeTab, filterCategory, filterStatus, filterEmployee, search, currentProfile?.id])
 
   // Pagination state & calculation
   const [currentPage, setCurrentPage] = useState(1)
@@ -512,20 +524,22 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
             className={`btn btn-sm ${activeTab === 'ALL' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => { setActiveTab('ALL'); setCurrentPage(1); }}
           >
-            All Tasks ({tasks.length})
+            {isStaffRestricted ? 'My Tasks' : 'All Tasks'} ({accessibleTasks.length})
           </button>
-          <button
-            className={`btn btn-sm ${activeTab === 'MY' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => { setActiveTab('MY'); setCurrentPage(1); }}
-          >
-            <UserCheck size={14} />
-            My Assigned Tasks ({tasks.filter((t) => t.assigned_employee_id === currentProfile?.id).length})
-          </button>
+          {!isStaffRestricted && (
+            <button
+              className={`btn btn-sm ${activeTab === 'MY' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => { setActiveTab('MY'); setCurrentPage(1); }}
+            >
+              <UserCheck size={14} />
+              My Assigned Tasks ({accessibleTasks.filter((t) => t.assigned_employee_id === currentProfile?.id).length})
+            </button>
+          )}
           <button
             className={`btn btn-sm ${activeTab === 'ACTIVE' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => { setActiveTab('ACTIVE'); setCurrentPage(1); }}
           >
-            In Progress ({tasks.filter((t) => t.status !== 'COMPLETED').length})
+            In Progress ({accessibleTasks.filter((t) => t.status !== 'COMPLETED').length})
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'OVERDUE' ? 'btn-primary' : 'btn-outline'}`}
@@ -533,13 +547,13 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
             style={activeTab === 'OVERDUE' ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : {}}
           >
             <AlertCircle size={14} />
-            Overdue ({tasks.filter((t) => t.status !== 'COMPLETED' && t.due_date && t.due_date < format(new Date(), 'yyyy-MM-dd')).length})
+            Overdue ({accessibleTasks.filter((t) => t.status !== 'COMPLETED' && t.due_date && t.due_date < format(new Date(), 'yyyy-MM-dd')).length})
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'COMPLETED' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => { setActiveTab('COMPLETED'); setCurrentPage(1); }}
           >
-            Completed ({tasks.filter((t) => t.status === 'COMPLETED').length})
+            Completed ({accessibleTasks.filter((t) => t.status === 'COMPLETED').length})
           </button>
         </div>
 
@@ -628,30 +642,35 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                     return (
                       <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTask(t)}>
                         {/* Task Title & Category */}
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 18, lineHeight: '20px' }}>{categoryCfg.icon}</span>
-                            <div>
-                              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>
+                        <td style={{ maxWidth: 320, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
+                            <span style={{ fontSize: 18, lineHeight: '20px', flexShrink: 0 }}>{categoryCfg.icon}</span>
+                            <div style={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal' }}>
                                 {t.title}
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                                 <span style={{
                                   fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4,
-                                  background: `${categoryCfg.color}15`, color: categoryCfg.color
+                                  background: `${categoryCfg.color}15`, color: categoryCfg.color, flexShrink: 0
                                 }}>
                                   {categoryCfg.label}
                                 </span>
-                                <span style={{ fontSize: 11, color: priorityCfg.color, fontWeight: 600 }}>
+                                <span style={{ fontSize: 11, color: priorityCfg.color, fontWeight: 600, flexShrink: 0 }}>
                                   ● {priorityCfg.label} Priority
                                 </span>
+                                {t.created_at && (
+                                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                                    • Assigned: {format(parseISO(t.created_at), 'dd MMM yyyy, hh:mm a')}
+                                  </span>
+                                )}
                                 {t.deliverable_link && (
                                   <a
                                     href={t.deliverable_link}
                                     target="_blank"
                                     rel="noreferrer"
                                     onClick={(e) => e.stopPropagation()}
-                                    style={{ fontSize: 11, color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 2 }}
+                                    style={{ fontSize: 11, color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0 }}
                                   >
                                     Deliverable <ExternalLink size={10} />
                                   </a>
@@ -960,7 +979,7 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
               <div>
-                <span className="text-section-header">{selectedTask.title}</span>
+                <span className="text-section-header" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>{selectedTask.title}</span>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                   Client: <strong>{selectedTask.client?.name}</strong> {selectedTask.client?.company ? `(${selectedTask.client.company})` : ''}
                 </div>
@@ -1139,6 +1158,10 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                     <div>
                       <span className="text-meta">Specialist: </span>
                       <strong>{selectedTask.assigned_employee?.name ?? 'Unassigned'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-meta">Assigned Time: </span>
+                      <strong>{selectedTask.created_at ? format(parseISO(selectedTask.created_at), 'dd MMM yyyy, hh:mm a') : '—'}</strong>
                     </div>
                     <div>
                       <span className="text-meta">Due Date: </span>

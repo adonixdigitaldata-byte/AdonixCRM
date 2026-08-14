@@ -10,6 +10,9 @@ export default async function QuotationsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'CLIENT') redirect('/portal?section=finance')
+
   const { data: quotations } = await supabase
     .from('quotations')
     .select('*, client:clients(name, company)')

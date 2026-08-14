@@ -512,17 +512,16 @@ export default function DashboardClient({
           </div>
         </div>
 
-        {/* Admin-only: Agent Leaderboard (Hidden for rollout) */}
-        {/*
-        {isAdmin && agentPerf.length > 0 && (
+        {/* Agent Leaderboard & Performance Overview */}
+        {(isAdmin || profile.role === 'ACCOUNT_MANAGER') && agentPerf.length > 0 && (
           <div className="card mb-6">
             <div className="card-header">
               <div className="flex items-center gap-2">
                 <Trophy size={15} style={{ color: '#d97706' }} />
-                <span className="text-section-header">Agent leaderboard</span>
+                <span className="text-section-header">Sales Agent Leaderboard</span>
               </div>
               <Link href="/settings/agents" className="btn btn-ghost btn-sm" style={{ fontSize: 13 }}>
-                Manage agents <ArrowRight size={13} />
+                Manage team <ArrowRight size={13} />
               </Link>
             </div>
             <div className="card-body" style={{ padding: 0 }}>
@@ -589,7 +588,6 @@ export default function DashboardClient({
             </div>
           </div>
         )}
-        */}
       </div>
     </div>
   )

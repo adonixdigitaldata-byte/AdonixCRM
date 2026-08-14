@@ -5,13 +5,14 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createServiceClient()
     const body = await request.json()
-    const { userId, role, specialization, work_status, is_active } = body
+    const { userId, role, specialization, work_status, is_active, name } = body
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     const updates: Record<string, any> = {}
+    if (name !== undefined && name.trim()) updates.name = name.trim()
     if (role !== undefined) updates.role = role
     if (specialization !== undefined) updates.specialization = specialization
     if (work_status !== undefined) updates.work_status = work_status
@@ -28,9 +29,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Update user_metadata in auth.users
-    if (role) {
+    const authMetadataUpdates: Record<string, any> = {}
+    if (role) authMetadataUpdates.role = role
+    if (name) authMetadataUpdates.name = name.trim()
+
+    if (Object.keys(authMetadataUpdates).length > 0) {
       await supabase.auth.admin.updateUserById(userId, {
-        user_metadata: { role }
+        user_metadata: authMetadataUpdates,
       })
     }
 

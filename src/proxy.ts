@@ -43,11 +43,30 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && pathname === '/login') {
-    const redirectTo = request.nextUrl.searchParams.get('redirectTo') || '/dashboard'
+    const isClientRole = user.user_metadata?.role === 'CLIENT'
+    const defaultTarget = isClientRole ? '/portal' : '/dashboard'
+    const redirectTo = request.nextUrl.searchParams.get('redirectTo') || defaultTarget
     const url = request.nextUrl.clone()
-    url.pathname = redirectTo.startsWith('/') ? redirectTo : '/dashboard'
+    url.pathname = redirectTo.startsWith('/') ? redirectTo : defaultTarget
     url.searchParams.delete('redirectTo')
     return NextResponse.redirect(url)
+  }
+
+  // Redirect client role users away from non-allowed CRM administration routes to /portal overview
+  if (user && user.user_metadata?.role === 'CLIENT') {
+    const isAllowedClientRoute =
+      pathname.startsWith('/portal') ||
+      pathname.startsWith('/reset-password') ||
+      pathname.startsWith('/api') ||
+      pathname.startsWith('/auth') ||
+      (pathname.startsWith('/quotations/') && pathname !== '/quotations') ||
+      (pathname.startsWith('/invoices/') && pathname !== '/invoices')
+
+    if (!isAllowedClientRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/portal'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

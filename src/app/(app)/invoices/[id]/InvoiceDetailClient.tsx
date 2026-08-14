@@ -301,7 +301,11 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
     <div>
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => router.push('/invoices')}>
+          <button
+            className="btn btn-ghost btn-icon btn-sm"
+            onClick={() => router.push(profile.role === 'CLIENT' ? '/portal?section=finance' : '/invoices')}
+            title="Back"
+          >
             <ArrowLeft size={16} />
           </button>
           <div>
@@ -314,80 +318,90 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
             {isOverdue ? 'OVERDUE' : invoice.status.replace('_', ' ')}
           </span>
         </div>
+
         <div className="flex gap-2 no-print flex-wrap items-center">
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginRight: 8 }}>
-            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Office:</span>
-            <select
-              className="form-select"
-              value={officeLocation}
-              onChange={(e) => {
-                const newLoc = e.target.value as OfficeLocationKey
-                setOfficeLocation(newLoc)
-                supabase.from('invoices').update({ office_location: newLoc }).eq('id', invoice.id).then()
-              }}
-              style={{ padding: '3px 8px', fontSize: 12, height: 30, cursor: 'pointer', borderRadius: 6 }}
-            >
-              <option value="KSA">🇸🇦 Saudi Arabia (Jeddah)</option>
-              <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
-            </select>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
-            <input
-              type="checkbox"
-              checked={showCr}
-              onChange={(e) => setShowCr(e.target.checked)}
-              style={{ cursor: 'pointer' }}
-            />
-            Show CR No.
-          </label>
-          <Link href={`/invoices/${invoice.id}/edit`} className="btn btn-outline btn-sm">
-            <Edit2 size={14} />
-            Edit invoice
-          </Link>
-          <button className="btn btn-outline btn-sm" onClick={handlePrint}>
-            <Printer size={14} />
-            Print / PDF
-          </button>
-
-          {invoice.status === 'DRAFT' && (
-            <button className="btn btn-outline btn-sm" onClick={() => updateStatus('SENT')} disabled={updatingStatus}>
-              <Send size={14} />
-              Mark as sent
-            </button>
-          )}
-
-          {invoice.status === 'SENT' && (
-            <button className="btn btn-outline btn-sm" onClick={() => updateStatus('DRAFT')} disabled={updatingStatus}>
-              <RotateCcw size={14} />
-              Mark as draft
-            </button>
-          )}
-
-          {invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
-            <button className="btn btn-primary btn-sm" onClick={openPaymentForm}>
-              <Plus size={14} />
-              Record payment
-            </button>
-          )}
-
-          {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteInvoiceModal} disabled={saving}>
-              <Trash2 size={14} />
-              Delete
-            </button>
-          )}
-
-          {invoice.status !== 'CANCELLED' ? (
-            <button className="btn btn-danger btn-sm" onClick={() => updateStatus('CANCELLED')} disabled={updatingStatus}>
-              <XCircle size={14} />
-              Cancel invoice
+          {profile.role === 'CLIENT' ? (
+            <button className="btn btn-primary btn-sm" onClick={handlePrint}>
+              <Printer size={14} />
+              Print / Save as PDF
             </button>
           ) : (
-            <button className="btn btn-outline btn-sm" onClick={() => updateStatus('DRAFT')} disabled={updatingStatus}>
-              <RotateCcw size={14} />
-              Re-open as draft
-            </button>
+            <>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginRight: 8 }}>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Office:</span>
+                <select
+                  className="form-select"
+                  value={officeLocation}
+                  onChange={(e) => {
+                    const newLoc = e.target.value as OfficeLocationKey
+                    setOfficeLocation(newLoc)
+                    supabase.from('invoices').update({ office_location: newLoc }).eq('id', invoice.id).then()
+                  }}
+                  style={{ padding: '3px 8px', fontSize: 12, height: 30, cursor: 'pointer', borderRadius: 6 }}
+                >
+                  <option value="KSA">🇸🇦 Saudi Arabia (Jeddah)</option>
+                  <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={showCr}
+                  onChange={(e) => setShowCr(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                Show CR No.
+              </label>
+              <Link href={`/invoices/${invoice.id}/edit`} className="btn btn-outline btn-sm">
+                <Edit2 size={14} />
+                Edit invoice
+              </Link>
+              <button className="btn btn-outline btn-sm" onClick={handlePrint}>
+                <Printer size={14} />
+                Print / PDF
+              </button>
+
+              {invoice.status === 'DRAFT' && (
+                <button className="btn btn-outline btn-sm" onClick={() => updateStatus('SENT')} disabled={updatingStatus}>
+                  <Send size={14} />
+                  Mark as sent
+                </button>
+              )}
+
+              {invoice.status === 'SENT' && (
+                <button className="btn btn-outline btn-sm" onClick={() => updateStatus('DRAFT')} disabled={updatingStatus}>
+                  <RotateCcw size={14} />
+                  Mark as draft
+                </button>
+              )}
+
+              {invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
+                <button className="btn btn-primary btn-sm" onClick={openPaymentForm}>
+                  <Plus size={14} />
+                  Record payment
+                </button>
+              )}
+
+              {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteInvoiceModal} disabled={saving}>
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              )}
+
+              {invoice.status !== 'CANCELLED' ? (
+                <button className="btn btn-danger btn-sm" onClick={() => updateStatus('CANCELLED')} disabled={updatingStatus}>
+                  <XCircle size={14} />
+                  Cancel invoice
+                </button>
+              ) : (
+                <button className="btn btn-outline btn-sm" onClick={() => updateStatus('DRAFT')} disabled={updatingStatus}>
+                  <RotateCcw size={14} />
+                  Re-open as draft
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -707,7 +721,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
         {/* Full-width Terms & Notes below main document grid (Matches Quotations style) */}
         <div style={{ maxWidth: 900, marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {invoice.terms && (
-            <div className="card card-allow-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+            <div className="card" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
               <div className="card-header"><span className="text-section-header">Terms &amp; Conditions</span></div>
               <div className="card-body">
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, wordBreak: 'break-word' }}>
@@ -718,7 +732,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
           )}
 
           {invoice.notes && (
-            <div className="card card-allow-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+            <div className="card" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
               <div className="card-header"><span className="text-section-header">Notes &amp; Remarks</span></div>
               <div className="card-body">
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, wordBreak: 'break-word' }}>

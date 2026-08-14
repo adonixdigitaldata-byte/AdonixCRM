@@ -18,6 +18,8 @@ export default async function LeadsPage({
   const { data: profile } = await supabase
     .from('profiles').select('*').eq('id', user.id).single()
 
+  if (profile?.role === 'CLIENT') redirect('/portal')
+
   const [
     { data: stages },
     { data: campaigns },

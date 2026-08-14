@@ -34,6 +34,8 @@ export default async function ClientsPage() {
     .eq('id', user.id)
     .single()
 
+  if (currentProfile?.role === 'CLIENT') redirect('/portal')
+
   let finalClients = (clients as any[]) ?? []
 
   if (currentProfile?.role !== 'ADMIN') {

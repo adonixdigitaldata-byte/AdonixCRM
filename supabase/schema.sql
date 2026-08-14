@@ -73,12 +73,13 @@ create table if not exists lead_stages (
 insert into lead_stages (key, label, sort_order, color_hex) values
   ('new',          'New',          1, '#0284C7'),
   ('contacted',    'Contacted',    2, '#D97706'),
-  ('qualified',    'Qualified',    3, '#7C3AED'),
-  ('proposal',     'Proposal',     4, '#DB2777'),
-  ('negotiation',  'Negotiation',  5, '#EA580C'),
-  ('won',          'Won',          6, '#16A34A'),
-  ('lost',         'Lost',         7, '#DC2626'),
-  ('followup',     'Follow-up',    8, '#0F766E')
+  ('no_reply',     'No Reply',     3, '#64748B'),
+  ('qualified',    'Qualified',    4, '#7C3AED'),
+  ('proposal',     'Proposal',     5, '#DB2777'),
+  ('negotiation',  'Negotiation',  6, '#EA580C'),
+  ('won',          'Won',          7, '#16A34A'),
+  ('lost',         'Lost',         8, '#DC2626'),
+  ('followup',     'Follow-up',    9, '#0F766E')
 on conflict (key) do nothing;
 
 -- ============================================================
@@ -582,7 +583,9 @@ alter table clients add column if not exists notes text;
 -- 16. CLIENT TASKS & TECHNICAL DELIVERABLES
 -- ============================================================
 alter table profiles drop constraint if exists profiles_role_check;
-alter table profiles add constraint profiles_role_check check (role in ('ADMIN','ACCOUNT_MANAGER','AGENT','EMPLOYEE'));
+alter table profiles add constraint profiles_role_check check (role in ('ADMIN','ACCOUNT_MANAGER','AGENT','EMPLOYEE','CLIENT'));
+alter table profiles add column if not exists client_id uuid references clients(id) on delete set null;
+alter table clients add column if not exists profile_id uuid references profiles(id) on delete set null;
 alter table profiles add column if not exists specialization text;
 alter table profiles add column if not exists work_status text not null default 'AVAILABLE';
 

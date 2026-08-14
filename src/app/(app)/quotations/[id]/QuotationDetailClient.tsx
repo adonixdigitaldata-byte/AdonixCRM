@@ -180,7 +180,11 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
     <div>
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => router.push('/quotations')}>
+          <button
+            className="btn btn-ghost btn-icon btn-sm"
+            onClick={() => router.push(profile.role === 'CLIENT' ? '/portal?section=finance' : '/quotations')}
+            title="Back"
+          >
             <ArrowLeft size={16} />
           </button>
           <div>
@@ -193,65 +197,75 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             {displayStatus}
           </span>
         </div>
-        <div className="flex gap-2 no-print items-center flex-wrap">
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginRight: 8 }}>
-            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Office:</span>
-            <select
-              className="form-select"
-              value={officeLocation}
-              onChange={(e) => {
-                const newLoc = e.target.value as OfficeLocationKey
-                setOfficeLocation(newLoc)
-                supabase.from('quotations').update({ office_location: newLoc }).eq('id', quotation.id).then()
-              }}
-              style={{ padding: '3px 8px', fontSize: 12, height: 30, cursor: 'pointer', borderRadius: 6 }}
-            >
-              <option value="KSA">🇸🇦 Saudi Arabia (Jeddah)</option>
-              <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
-            </select>
-          </div>
 
-          <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
-            <input
-              type="checkbox"
-              checked={showCr}
-              onChange={(e) => setShowCr(e.target.checked)}
-              style={{ cursor: 'pointer' }}
-            />
-            Show CR No.
-          </label>
-          <Link href={`/quotations/${quotation.id}/edit`} className="btn btn-outline btn-sm">
-            <Edit2 size={14} />
-            Edit quotation
-          </Link>
-          <button className="btn btn-outline btn-sm" onClick={handlePrint}>
-            <Printer size={14} />
-            Print / PDF
-          </button>
-          {quotation.status === 'ACCEPTED' && (
-            <button className="btn btn-primary btn-sm" onClick={convertToInvoice} disabled={updating}>
-              <FileText size={14} />
-              Convert to invoice
+        <div className="flex gap-2 no-print items-center flex-wrap">
+          {profile.role === 'CLIENT' ? (
+            <button className="btn btn-primary btn-sm" onClick={handlePrint}>
+              <Printer size={14} />
+              Print / Save as PDF
             </button>
+          ) : (
+            <>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginRight: 8 }}>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Office:</span>
+                <select
+                  className="form-select"
+                  value={officeLocation}
+                  onChange={(e) => {
+                    const newLoc = e.target.value as OfficeLocationKey
+                    setOfficeLocation(newLoc)
+                    supabase.from('quotations').update({ office_location: newLoc }).eq('id', quotation.id).then()
+                  }}
+                  style={{ padding: '3px 8px', fontSize: 12, height: 30, cursor: 'pointer', borderRadius: 6 }}
+                >
+                  <option value="KSA">🇸🇦 Saudi Arabia (Jeddah)</option>
+                  <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={showCr}
+                  onChange={(e) => setShowCr(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                Show CR No.
+              </label>
+              <Link href={`/quotations/${quotation.id}/edit`} className="btn btn-outline btn-sm">
+                <Edit2 size={14} />
+                Edit quotation
+              </Link>
+              <button className="btn btn-outline btn-sm" onClick={handlePrint}>
+                <Printer size={14} />
+                Print / PDF
+              </button>
+              {quotation.status === 'ACCEPTED' && (
+                <button className="btn btn-primary btn-sm" onClick={convertToInvoice} disabled={updating}>
+                  <FileText size={14} />
+                  Convert to invoice
+                </button>
+              )}
+              {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteModal} disabled={updating}>
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              )}
+              {nextStatuses.map((status) => (
+                <button
+                  key={status}
+                  className={`btn btn-sm ${status === 'ACCEPTED' ? 'btn-primary' : status === 'REJECTED' ? 'btn-danger' : 'btn-outline'}`}
+                  onClick={() => updateStatus(status)}
+                  disabled={updating}
+                >
+                  {status === 'SENT' && <Send size={14} />}
+                  {status === 'ACCEPTED' && <CheckCircle size={14} />}
+                  Mark as {status.toLowerCase()}
+                </button>
+              ))}
+            </>
           )}
-          {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteModal} disabled={updating}>
-              <Trash2 size={14} />
-              Delete
-            </button>
-          )}
-          {nextStatuses.map((status) => (
-            <button
-              key={status}
-              className={`btn btn-sm ${status === 'ACCEPTED' ? 'btn-primary' : status === 'REJECTED' ? 'btn-danger' : 'btn-outline'}`}
-              onClick={() => updateStatus(status)}
-              disabled={updating}
-            >
-              {status === 'SENT' && <Send size={14} />}
-              {status === 'ACCEPTED' && <CheckCircle size={14} />}
-              Mark as {status.toLowerCase()}
-            </button>
-          ))}
         </div>
       </div>
 

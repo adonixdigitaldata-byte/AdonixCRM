@@ -90,9 +90,16 @@ export default function ResetPasswordPage() {
       return
     }
 
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = user ? await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle() : { data: null }
+
     setSuccess(true)
     setTimeout(() => {
-      router.push('/dashboard')
+      if (profile?.role === 'CLIENT') {
+        router.push('/portal')
+      } else {
+        router.push('/dashboard')
+      }
       router.refresh()
     }, 1500)
   }
@@ -128,7 +135,7 @@ export default function ResetPasswordPage() {
               Adonix CRM
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Account Setup
+              Security &amp; Account Setup
             </div>
           </div>
         </div>
@@ -144,21 +151,21 @@ export default function ResetPasswordPage() {
                   marginBottom: 4,
                 }}
               >
-                Set your password
+                Set your new password
               </h1>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                Create a new password to activate your agent account
+                Create a password to access your account securely
               </p>
             </div>
 
             {authenticating ? (
               <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
                 <span className="spinner" style={{ display: 'inline-block', marginBottom: 8 }} />
-                <div>Verifying invitation token...</div>
+                <div>Verifying authentication link...</div>
               </div>
             ) : success ? (
               <div style={{ padding: '12px 16px', background: 'var(--success-light)', border: '1px solid var(--success)', borderRadius: 'var(--radius-sm)', color: 'var(--success)', fontSize: 13 }}>
-                Password updated successfully! Redirecting to dashboard...
+                Password updated successfully! Redirecting to your portal...
               </div>
             ) : (
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

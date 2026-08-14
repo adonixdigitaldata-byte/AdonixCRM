@@ -114,6 +114,54 @@ export default function AgentDetailClient({
   const router = useRouter()
   const supabase = createClient()
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null)
+  const [agentState, setAgentState] = useState(agent)
+
+  useEffect(() => {
+    setAgentState(agent)
+  }, [agent])
+
+  // Edit User Name & Profile state
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editName, setEditName] = useState(agent.name)
+  const [editRole, setEditRole] = useState(agent.role)
+  const [editSpecialization, setEditSpecialization] = useState(agent.specialization || '')
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editName.trim() || savingProfile) return
+
+    setSavingProfile(true)
+    try {
+      const res = await fetch('/api/agents/update-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: agent.id,
+          name: editName.trim(),
+          role: editRole,
+          specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update user profile')
+
+      setAgentState((prev) => ({
+        ...prev,
+        name: editName.trim(),
+        role: editRole as any,
+        specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+      }))
+
+      setResetMsg({ text: `User profile for "${editName.trim()}" updated successfully!`, type: 'success' })
+      setShowEditModal(false)
+    } catch (err: any) {
+      alert(err.message || 'Failed to update profile')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -127,7 +175,7 @@ export default function AgentDetailClient({
   }, [])
 
   const [activeTab, setActiveTab] = useState<'leads' | 'tasks' | 'followups' | 'quotations' | 'invoices' | 'activity'>(
-    agent.role === 'EMPLOYEE' ? 'tasks' : 'leads'
+    agentState.role === 'EMPLOYEE' ? 'tasks' : 'leads'
   )
   const [leadSearch, setLeadSearch] = useState('')
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
@@ -422,7 +470,7 @@ export default function AgentDetailClient({
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 className="text-page-title">{agent.name}</h1>
+            <h1 className="text-page-title">{agentState.name}</h1>
             <p className="text-meta" style={{ marginTop: 2 }}>
               Agent Performance Overview &amp; Analytics
             </p>
@@ -430,6 +478,21 @@ export default function AgentDetailClient({
         </div>
 
         <div className="flex items-center gap-2">
+          {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'ACCOUNT_MANAGER' || currentProfile?.id === agent.id) && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                setEditName(agentState.name)
+                setEditRole(agentState.role)
+                setEditSpecialization(agentState.specialization || '')
+                setShowEditModal(true)
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+            >
+              <Edit2 size={14} color="var(--accent)" /> Edit Profile / Name
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-outline btn-sm"
@@ -439,7 +502,7 @@ export default function AgentDetailClient({
             <Mail size={14} />
             {resendingReset ? 'Sending link...' : 'Send reset password link'}
           </button>
-          {agent.role !== 'EMPLOYEE' && (
+          {agentState.role !== 'EMPLOYEE' && (
             <Link href="/leads?action=add" className="btn btn-primary btn-sm">
               <Users size={14} />
               Assign new lead
@@ -485,20 +548,20 @@ export default function AgentDetailClient({
                   fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
                   boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)',
                 }}>
-                  {initials}
+                  {agentState.name.slice(0, 2).toUpperCase()}
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 4 }}>
                     <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {agent.name}
+                      {agentState.name}
                     </span>
                     <span className="badge" style={{
-                      background: agent.role === 'ADMIN' ? '#EFF6FF' : agent.role === 'ACCOUNT_MANAGER' ? '#F3E8FF' : agent.role === 'AGENT' ? '#DCFCE7' : '#F4F4F5',
-                      color: agent.role === 'ADMIN' ? '#2563EB' : agent.role === 'ACCOUNT_MANAGER' ? '#7E22CE' : agent.role === 'AGENT' ? '#15803D' : '#52525B',
+                      background: agentState.role === 'ADMIN' ? '#EFF6FF' : agentState.role === 'ACCOUNT_MANAGER' ? '#F3E8FF' : agentState.role === 'AGENT' ? '#DCFCE7' : '#F4F4F5',
+                      color: agentState.role === 'ADMIN' ? '#2563EB' : agentState.role === 'ACCOUNT_MANAGER' ? '#7E22CE' : agentState.role === 'AGENT' ? '#15803D' : '#52525B',
                       fontSize: 11, fontWeight: 600, border: '1px solid var(--border)',
                     }}>
-                      {agent.role === 'ADMIN' ? 'Admin' : agent.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : agent.role === 'AGENT' ? 'Sales Agent' : agent.specialization ? `${agent.specialization} Specialist` : 'Technical Employee'}
+                      {agentState.role === 'ADMIN' ? 'Admin' : agentState.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : agentState.role === 'AGENT' ? 'Sales Agent' : agentState.specialization ? `${agentState.specialization} Specialist` : 'Technical Employee'}
                     </span>
                     {isActive ? (
                       <span className="badge badge-success" style={{ fontSize: 11 }}>
@@ -1568,6 +1631,99 @@ export default function AgentDetailClient({
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT USER PROFILE & NAME MODAL */}
+      {showEditModal && (
+        <div className="modal-backdrop" onClick={() => !savingProfile && setShowEditModal(false)}>
+          <div className="modal-box" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ padding: 8, borderRadius: 8, background: 'rgba(79, 70, 229, 0.1)', color: 'var(--accent)' }}>
+                  <Edit2 size={18} />
+                </div>
+                <div>
+                  <h3 className="modal-title">Edit Team Member Profile</h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Update user name, role, and specialization</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={() => setShowEditModal(false)}
+                disabled={savingProfile}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile}>
+              <div className="modal-body" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="form-group">
+                  <label className="form-label form-label-required">Full Name</label>
+                  <input
+                    className="form-input"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Enter user full name..."
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label form-label-required">System Role</label>
+                  <select
+                    className="form-select"
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as any)}
+                  >
+                    <option value="ACCOUNT_MANAGER">Account Manager</option>
+                    <option value="AGENT">Sales Agent</option>
+                    <option value="EMPLOYEE">Technical Employee</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+
+                {editRole === 'EMPLOYEE' && (
+                  <div className="form-group">
+                    <label className="form-label">Technical Specialization</label>
+                    <select
+                      className="form-select"
+                      value={editSpecialization}
+                      onChange={(e) => setEditSpecialization(e.target.value)}
+                    >
+                      <option value="WEBSITE">Website Development</option>
+                      <option value="SOCIAL_MEDIA">Social Media</option>
+                      <option value="ADS">Meta / Google Ads</option>
+                      <option value="GMB">GMB / Local SEO</option>
+                      <option value="VIDEO_AI">Video &amp; AI Production</option>
+                      <option value="DESIGN">Graphic Design</option>
+                      <option value="SEO">SEO Campaign</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer" style={{ padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setShowEditModal(false)}
+                  disabled={savingProfile}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? 'Saving...' : 'Save Profile Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

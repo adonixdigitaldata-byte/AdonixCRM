@@ -6,8 +6,8 @@ import { getAppUrl } from '@/lib/utils/url'
 export async function POST(request: NextRequest) {
   const supabase = await createServiceClient()
   const body = await request.json()
-  const { email, name, mode, role = 'AGENT', specialization = null } = body
-
+  const { email, name, mode, role = 'AGENT', specialization = null, clientId = null } = body
+ 
   if (!email) {
     return NextResponse.json({ error: 'Email address is required' }, { status: 400 })
   }
@@ -33,22 +33,28 @@ export async function POST(request: NextRequest) {
 
   let userId: string | null = null
   let actionLink: string | null = null
+  let isPasswordReset = mode === 'forgot'
 
-  // 1. Try to generate an invite link for a new user
-  const { data: inviteData, error: inviteError } = await supabase.auth.admin.generateLink({
-    type: 'invite',
-    email: email.trim(),
-    options: {
-      redirectTo: callbackUrl,
-      data: { name: name || email.split('@')[0], role: role || 'AGENT' },
-    },
-  })
+  // 1. Try to generate an invite link for a new user (only if not explicit forgot mode)
+  if (!isPasswordReset) {
+    const { data: inviteData } = await supabase.auth.admin.generateLink({
+      type: 'invite',
+      email: email.trim(),
+      options: {
+        redirectTo: callbackUrl,
+        data: { name: name || email.split('@')[0], role: role || 'AGENT' },
+      },
+    })
 
-  if (inviteData?.properties?.action_link) {
-    actionLink = inviteData.properties.action_link
-    userId = inviteData.user?.id ?? null
-  } else {
-    // 2. If user already exists, generate a recovery/reset password link instead
+    if (inviteData?.properties?.action_link) {
+      actionLink = inviteData.properties.action_link
+      userId = inviteData.user?.id ?? null
+    }
+  }
+
+  // 2. If user already exists or mode === 'forgot', generate a recovery/reset password link instead
+  if (!actionLink) {
+    isPasswordReset = true
     const { data: recoveryData, error: recoveryError } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email: email.trim(),
@@ -72,7 +78,7 @@ export async function POST(request: NextRequest) {
   if (userId) {
     const { data: existingProf } = await supabase
       .from('profiles')
-      .select('role, specialization, work_status')
+      .select('role, specialization, work_status, client_id')
       .eq('id', userId)
       .maybeSingle()
 
@@ -81,20 +87,39 @@ export async function POST(request: NextRequest) {
       finalSpec = body.specialization !== undefined ? body.specialization : (existingProf.specialization || null)
     }
 
-    await supabase.from('profiles').upsert({
+    const profilePayload: any = {
       id: userId,
-      name,
+      name: name || email.split('@')[0],
       email,
       role: finalRole,
       specialization: finalSpec,
       work_status: existingProf?.work_status || 'AVAILABLE',
       is_active: true,
-    }, { onConflict: 'id' })
+    }
+
+    if (clientId) {
+      profilePayload.client_id = clientId
+    }
+
+    let { error: profErr } = await supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' })
+
+    if (profErr && profErr.message?.includes('client_id')) {
+      delete profilePayload.client_id
+      await supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' })
+    }
+
+    if (clientId) {
+      try {
+        await supabase.from('clients').update({ profile_id: userId }).eq('id', clientId)
+      } catch (e) {
+        console.warn('Could not update profile_id on clients:', e)
+      }
+    }
   }
 
   // 4. Send branded email via Resend with the actual action link
   if (actionLink) {
-    await sendAgentInviteEmail(email, name, actionLink, finalRole, finalSpec)
+    await sendAgentInviteEmail(email, name || email.split('@')[0], actionLink, finalRole, finalSpec, isPasswordReset)
   } else {
     return NextResponse.json({ error: 'Failed to generate invitation link' }, { status: 400 })
   }

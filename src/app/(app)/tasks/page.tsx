@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import TasksClient from './TasksClient'
 
 export const dynamic = 'force-dynamic'
@@ -8,9 +9,11 @@ export default async function TasksPage() {
 
   // 1. Get current user profile
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: currentProfile } = user
-    ? await supabase.from('profiles').select('*').eq('id', user.id).single()
-    : { data: null }
+  if (!user) redirect('/login')
+
+  const { data: currentProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+
+  if (currentProfile?.role === 'CLIENT') redirect('/portal')
 
   // 2. Fetch tasks with joins
   const { data: rawTasks } = await supabase
