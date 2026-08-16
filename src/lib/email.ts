@@ -187,7 +187,7 @@ export async function sendFollowupReminderEmail({
         <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px;">
           <h2 style="color: #18181b; margin-bottom: 8px;">Upcoming Lead Follow-up</h2>
           <p style="color: #52525b; font-size: 14px;">Hi ${agentName},</p>
-          <p style="color: #52525b; font-size: 14px;">You have a scheduled lead follow-up coming up in 15 minutes:</p>
+          <p style="color: #52525b; font-size: 14px;">You have an upcoming scheduled lead follow-up:</p>
           
           <div style="background-color: #f4f4f5; padding: 14px 16px; border-radius: 6px; margin: 16px 0;">
             <div style="font-size: 15px; font-weight: 600; color: #18181b;">${leadName}</div>

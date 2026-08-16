@@ -14,10 +14,11 @@ export async function GET(request: NextRequest) {
   const supabase = await createServiceClient()
 
   const now = new Date()
-  const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60 * 1000)
+  // Lookahead window: 65 minutes (covers 60 min cron schedule + 5 min safety buffer for jitter)
+  const lookaheadWindow = new Date(now.getTime() + 65 * 60 * 1000)
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000) // safety cutoff for missed/recent followups
 
-  // Fetch uncompleted followups scheduled within next 15 mins (up to 24 hours in past) where reminder hasn't been sent
+  // Fetch uncompleted followups scheduled within next 65 mins (up to 24 hours in past) where reminder hasn't been sent
   const { data: followups, error } = await supabase
     .from('lead_followups')
     .select(`
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     .eq('is_completed', false)
     .eq('reminder_sent', false)
     .gte('scheduled_at', oneDayAgo.toISOString())
-    .lte('scheduled_at', fifteenMinsFromNow.toISOString())
+    .lte('scheduled_at', lookaheadWindow.toISOString())
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
