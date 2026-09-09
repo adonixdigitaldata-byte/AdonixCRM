@@ -231,6 +231,9 @@ create table if not exists quotations (
   issue_date date not null default current_date,
   valid_until date,
   subtotal numeric(12,2) not null default 0,
+  discount_type text default 'PERCENTAGE' check (discount_type in ('PERCENTAGE', 'FIXED')),
+  discount_value numeric(12,2) default 0,
+  discount_amount numeric(12,2) default 0,
   tax_percent numeric(5,2) not null default 15.00,
   tax_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
@@ -243,15 +246,22 @@ create table if not exists quotations (
   updated_at timestamptz not null default now()
 );
 
+alter table quotations add column if not exists discount_type text default 'PERCENTAGE' check (discount_type in ('PERCENTAGE', 'FIXED'));
+alter table quotations add column if not exists discount_value numeric(12,2) default 0;
+alter table quotations add column if not exists discount_amount numeric(12,2) default 0;
+
 create table if not exists quotation_items (
   id uuid primary key default gen_random_uuid(),
   quotation_id uuid references quotations(id) on delete cascade,
   description text not null,
   qty numeric(10,2) not null default 1,
   unit_price numeric(12,2) not null default 0,
+  discount_percent numeric(5,2) default 0,
   amount numeric(12,2) not null default 0,
   sort_order int not null default 0
 );
+
+alter table quotation_items add column if not exists discount_percent numeric(5,2) default 0;
 
 -- ============================================================
 -- 10. INVOICES & LINE ITEMS
@@ -267,6 +277,9 @@ create table if not exists invoices (
   issue_date date not null default current_date,
   due_date date,
   subtotal numeric(12,2) not null default 0,
+  discount_type text default 'PERCENTAGE' check (discount_type in ('PERCENTAGE', 'FIXED')),
+  discount_value numeric(12,2) default 0,
+  discount_amount numeric(12,2) default 0,
   tax_percent numeric(5,2) not null default 15.00,
   tax_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
@@ -280,15 +293,22 @@ create table if not exists invoices (
   updated_at timestamptz not null default now()
 );
 
+alter table invoices add column if not exists discount_type text default 'PERCENTAGE' check (discount_type in ('PERCENTAGE', 'FIXED'));
+alter table invoices add column if not exists discount_value numeric(12,2) default 0;
+alter table invoices add column if not exists discount_amount numeric(12,2) default 0;
+
 create table if not exists invoice_items (
   id uuid primary key default gen_random_uuid(),
   invoice_id uuid references invoices(id) on delete cascade,
   description text not null,
   qty numeric(10,2) not null default 1,
   unit_price numeric(12,2) not null default 0,
+  discount_percent numeric(5,2) default 0,
   amount numeric(12,2) not null default 0,
   sort_order int not null default 0
 );
+
+alter table invoice_items add column if not exists discount_percent numeric(5,2) default 0;
 
 -- ============================================================
 -- 11. PAYMENTS
