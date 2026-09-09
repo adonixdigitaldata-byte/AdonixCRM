@@ -2226,18 +2226,67 @@ export default function ClientDetailClient({ client, profiles, tasks = [], invoi
               </div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="form-group">
-                  <label className="form-label">Account Manager / Agent</label>
-                  <select
-                    className="form-select"
-                    value={agentId}
-                    onChange={(e) => setAgentId(e.target.value)}
-                    style={{ fontSize: 13 }}
-                  >
-                    <option value="">Unassigned</option>
-                    {profiles.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
-                    ))}
-                  </select>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label className="form-label">Account Manager / Agent</label>
+                    {currentProfile?.role !== 'ADMIN' && (
+                      <span className="badge badge-default" style={{ fontSize: 10, padding: '1px 6px' }}>
+                        Admin Managed
+                      </span>
+                    )}
+                  </div>
+                  {currentProfile?.role === 'ADMIN' ? (
+                    <select
+                      className="form-select"
+                      value={agentId}
+                      onChange={(e) => setAgentId(e.target.value)}
+                      style={{ fontSize: 13 }}
+                    >
+                      <option value="">Unassigned</option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{
+                      padding: '8px 12px',
+                      background: 'var(--bg-subtle, #f8fafc)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}>
+                      <div style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {(profiles.find((p) => p.id === agentId)?.name || 'UN').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        {profiles.find((p) => p.id === agentId)?.name ? (
+                          <>
+                            <span>{profiles.find((p) => p.id === agentId)?.name}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400, marginLeft: 6 }}>
+                              ({profiles.find((p) => p.id === agentId)?.role})
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>Unassigned</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">

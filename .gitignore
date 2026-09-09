@@ -5,6 +5,7 @@ node_modules
 *.log
 *.tsbuildinfo
 .DS_Store
+supabase/.temp/
 
 # Ignore all markdown files except README
 *.md

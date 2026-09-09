@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
-import { ChevronLeft, ChevronRight, Users, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Users, Check, Trash2 } from 'lucide-react'
 import type { Lead } from '@/types/database'
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -19,14 +19,20 @@ interface Props {
   onRefresh: () => void
   agents?: { id: string; name: string }[]
   isAdmin?: boolean
+  userRole?: string
 }
 
-export default function LeadsTable({ leads, loading, onRefresh, agents = [], isAdmin = false }: Props) {
+export default function LeadsTable({ leads, loading, onRefresh, agents = [], isAdmin = false, userRole }: Props) {
   const router = useRouter()
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkAgentId, setBulkAgentId] = useState('')
   const [bulkAssigning, setBulkAssigning] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  const effectiveRole = userRole || (isAdmin ? 'ADMIN' : '')
+  const canBulkAction = ['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(effectiveRole)
+  const canBulkAssign = (effectiveRole === 'ADMIN' || isAdmin) && agents.length > 0
 
   // Reset to page 1 whenever leads list changes
   useEffect(() => {
@@ -40,7 +46,7 @@ export default function LeadsTable({ leads, loading, onRefresh, agents = [], isA
         <table className="table">
           <thead>
             <tr>
-              {isAdmin && <th style={{ width: 40 }}></th>}
+              {canBulkAction && <th style={{ width: 40 }}></th>}
               <th>Name</th><th>Phone</th><th>Email</th>
               <th>Stage</th><th>Source</th><th>Agent</th><th>Added</th>
             </tr>
@@ -48,7 +54,7 @@ export default function LeadsTable({ leads, loading, onRefresh, agents = [], isA
           <tbody>
             {[...Array(6)].map((_, i) => (
               <tr key={i}>
-                {isAdmin && <td><div className="skeleton" style={{ height: 16, width: 16, borderRadius: 4 }} /></td>}
+                {canBulkAction && <td><div className="skeleton" style={{ height: 16, width: 16, borderRadius: 4 }} /></td>}
                 {[...Array(7)].map((_, j) => (
                   <td key={j}>
                     <div className="skeleton" style={{ height: 16, width: '80%', borderRadius: 4 }} />
@@ -122,9 +128,35 @@ export default function LeadsTable({ leads, loading, onRefresh, agents = [], isA
     setBulkAssigning(false)
   }
 
+  async function handleBulkDelete() {
+    if (selectedIds.length === 0) return
+    const count = selectedIds.length
+    const confirmed = window.confirm(`Are you sure you want to permanently delete ${count} selected lead${count > 1 ? 's' : ''}? This action cannot be undone.`)
+    if (!confirmed) return
+
+    setBulkDeleting(true)
+    try {
+      const res = await fetch('/api/leads/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadIds: selectedIds }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setSelectedIds([])
+        onRefresh()
+      } else {
+        alert(data.error ?? 'Failed to delete leads')
+      }
+    } catch {
+      alert('Error deleting leads')
+    }
+    setBulkDeleting(false)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Bulk Assignment Bar */}
+      {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
         <div
           style={{
@@ -154,31 +186,56 @@ export default function LeadsTable({ leads, loading, onRefresh, agents = [], isA
             </button>
           </div>
 
-          {isAdmin && agents.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Users size={14} style={{ color: 'var(--text-secondary)' }} />
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Bulk Assign to:</span>
-              <select
-                className="form-input"
-                value={bulkAgentId}
-                onChange={(e) => setBulkAgentId(e.target.value)}
-                style={{ minWidth: 170, height: 34, fontSize: 13, padding: '4px 8px' }}
-              >
-                <option value="">Select agent...</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
+          <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
+            {canBulkAssign && (
+              <div className="flex items-center gap-2">
+                <Users size={14} style={{ color: 'var(--text-secondary)' }} />
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Bulk Assign to:</span>
+                <select
+                  className="form-input"
+                  value={bulkAgentId}
+                  onChange={(e) => setBulkAgentId(e.target.value)}
+                  style={{ minWidth: 170, height: 34, fontSize: 13, padding: '4px 8px' }}
+                >
+                  <option value="">Select agent...</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={!bulkAgentId || bulkAssigning || bulkDeleting}
+                  onClick={handleBulkAssign}
+                >
+                  {bulkAssigning ? 'Assigning...' : `Assign ${selectedIds.length} lead${selectedIds.length > 1 ? 's' : ''}`}
+                </button>
+              </div>
+            )}
+
+            {canBulkAction && (
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
-                disabled={!bulkAgentId || bulkAssigning}
-                onClick={handleBulkAssign}
+                className="btn btn-sm"
+                style={{
+                  background: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontWeight: 500,
+                  cursor: (bulkDeleting || bulkAssigning) ? 'not-allowed' : 'pointer',
+                  opacity: (bulkDeleting || bulkAssigning) ? 0.7 : 1,
+                }}
+                disabled={bulkDeleting || bulkAssigning}
+                onClick={handleBulkDelete}
               >
-                {bulkAssigning ? 'Assigning...' : `Assign ${selectedIds.length} lead${selectedIds.length > 1 ? 's' : ''}`}
+                <Trash2 size={14} />
+                {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.length} lead${selectedIds.length > 1 ? 's' : ''}`}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -186,7 +243,7 @@ export default function LeadsTable({ leads, loading, onRefresh, agents = [], isA
         <table className="table">
           <thead>
             <tr>
-              {isAdmin && (
+              {canBulkAction && (
                 <th style={{ width: 40, textAlign: 'center' }}>
                   <input
                     type="checkbox"
@@ -217,7 +274,7 @@ export default function LeadsTable({ leads, loading, onRefresh, agents = [], isA
                   style={{ background: isSelected ? 'rgba(79, 70, 229, 0.04)' : undefined }}
                   onClick={() => router.push(`/leads/${lead.id}`)}
                 >
-                  {isAdmin && (
+                  {canBulkAction && (
                     <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"

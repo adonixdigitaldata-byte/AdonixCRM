@@ -76,6 +76,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
         *,
         client:clients(id, name, company),
         assigned_employee:profiles!assigned_employee_id(id, name, email, role, specialization, avatar_url, work_status),
+        creator:profiles!created_by(id, name),
         updates:client_task_updates(*)
       `)
       .eq('assigned_employee_id', id)

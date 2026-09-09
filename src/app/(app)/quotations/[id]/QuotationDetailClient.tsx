@@ -20,6 +20,14 @@ const STATUS_BADGE: Record<string, string> = {
   REJECTED: 'badge-danger', EXPIRED: 'badge-warning',
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  SENT: 'Sent',
+  ACCEPTED: 'Accepted',
+  REJECTED: 'Rejected',
+  EXPIRED: 'Expired',
+}
+
 const STATUS_TRANSITIONS: Record<QuotationStatus, QuotationStatus[]> = {
   DRAFT: ['SENT', 'ACCEPTED'],
   SENT: ['ACCEPTED', 'REJECTED', 'EXPIRED'],
@@ -137,10 +145,11 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
     }
   }
 
+  const DEFAULT_INVOICE_TERMS = `1. Payment due upon receipt or as specified above.\n2. Payment via bank transfer or cheque.\n3. Tax: 15% VAT applicable as per KSA tax regulations.`
+
   async function convertToInvoice() {
     setUpdating(true)
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`
-
     const { data: invoice } = await supabase.from('invoices').insert({
       invoice_number: invoiceNumber,
       quotation_id: quotation.id,
@@ -149,21 +158,25 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
       currency: curr,
       issue_date: new Date().toISOString().slice(0, 10),
       subtotal: quotation.subtotal,
+      discount_type: quotation.discount_type || 'PERCENTAGE',
+      discount_value: quotation.discount_value || 0,
+      discount_amount: quotation.discount_amount || 0,
       tax_percent: quotation.tax_percent,
       tax_amount: quotation.tax_amount,
       total: quotation.total,
       notes: quotation.notes || null,
-      terms: quotation.terms || null,
+      terms: DEFAULT_INVOICE_TERMS,
       created_by: profile.id,
     }).select('id').single()
 
     if (invoice && quotation.items) {
       await supabase.from('invoice_items').insert(
-        quotation.items.map((item, idx) => ({
+        quotation.items.map((item: any, idx: number) => ({
           invoice_id: invoice.id,
           description: item.description,
           qty: item.qty,
           unit_price: item.unit_price,
+          discount_percent: item.discount_percent || 0,
           amount: item.amount,
           sort_order: idx,
         }))
@@ -175,6 +188,9 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
   }
 
   const nextStatuses = STATUS_TRANSITIONS[quotation.status as QuotationStatus] ?? []
+  const hasItemDiscounts = (quotation.items ?? []).some((i: any) => Number(i.discount_percent) > 0)
+  const hasOverallDiscount = Number(quotation.discount_amount) > 0
+  const colSpan = hasItemDiscounts ? 4 : 3
 
   return (
     <div>
@@ -183,7 +199,6 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
           <button
             className="btn btn-ghost btn-icon btn-sm"
             onClick={() => router.push(profile.role === 'CLIENT' ? '/portal?section=finance' : '/quotations')}
-            title="Back"
           >
             <ArrowLeft size={16} />
           </button>
@@ -194,78 +209,69 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             </p>
           </div>
           <span className={`badge ${STATUS_BADGE[displayStatus] ?? 'badge-default'}`}>
-            {displayStatus}
+            {STATUS_LABELS[displayStatus] ?? displayStatus}
           </span>
         </div>
 
-        <div className="flex gap-2 no-print items-center flex-wrap">
-          {profile.role === 'CLIENT' ? (
-            <button className="btn btn-primary btn-sm" onClick={handlePrint}>
-              <Printer size={14} />
-              Print / Save as PDF
-            </button>
-          ) : (
-            <>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginRight: 8 }}>
-                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Office:</span>
-                <select
-                  className="form-select"
-                  value={officeLocation}
-                  onChange={(e) => {
-                    const newLoc = e.target.value as OfficeLocationKey
-                    setOfficeLocation(newLoc)
-                    supabase.from('quotations').update({ office_location: newLoc }).eq('id', quotation.id).then()
-                  }}
-                  style={{ padding: '3px 8px', fontSize: 12, height: 30, cursor: 'pointer', borderRadius: 6 }}
-                >
-                  <option value="KSA">🇸🇦 Saudi Arabia (Jeddah)</option>
-                  <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
-                </select>
-              </div>
+        <div className="flex items-center gap-2">
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginRight: 8 }}>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Office:</span>
+            <select
+              className="form-select"
+              value={officeLocation}
+              onChange={(e) => {
+                const newLoc = e.target.value as OfficeLocationKey
+                setOfficeLocation(newLoc)
+                supabase.from('quotations').update({ office_location: newLoc }).eq('id', quotation.id).then()
+              }}
+              style={{ padding: '3px 8px', fontSize: 12, height: 30, cursor: 'pointer', borderRadius: 6 }}
+            >
+              <option value="KSA">🇸🇦 Saudi Arabia (Jeddah)</option>
+              <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
+            </select>
+          </div>
 
-              <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={showCr}
-                  onChange={(e) => setShowCr(e.target.checked)}
-                  style={{ cursor: 'pointer' }}
-                />
-                Show CR No.
-              </label>
-              <Link href={`/quotations/${quotation.id}/edit`} className="btn btn-outline btn-sm">
-                <Edit2 size={14} />
-                Edit quotation
-              </Link>
-              <button className="btn btn-outline btn-sm" onClick={handlePrint}>
-                <Printer size={14} />
-                Print / PDF
-              </button>
-              {quotation.status === 'ACCEPTED' && (
-                <button className="btn btn-primary btn-sm" onClick={convertToInvoice} disabled={updating}>
-                  <FileText size={14} />
-                  Convert to invoice
-                </button>
-              )}
-              {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteModal} disabled={updating}>
-                  <Trash2 size={14} />
-                  Delete
-                </button>
-              )}
-              {nextStatuses.map((status) => (
-                <button
-                  key={status}
-                  className={`btn btn-sm ${status === 'ACCEPTED' ? 'btn-primary' : status === 'REJECTED' ? 'btn-danger' : 'btn-outline'}`}
-                  onClick={() => updateStatus(status)}
-                  disabled={updating}
-                >
-                  {status === 'SENT' && <Send size={14} />}
-                  {status === 'ACCEPTED' && <CheckCircle size={14} />}
-                  Mark as {status.toLowerCase()}
-                </button>
-              ))}
-            </>
+          <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={showCr}
+              onChange={(e) => setShowCr(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Show CR No.
+          </label>
+          <Link href={`/quotations/${quotation.id}/edit`} className="btn btn-outline btn-sm">
+            <Edit2 size={14} />
+            Edit quotation
+          </Link>
+          <button className="btn btn-outline btn-sm" onClick={handlePrint}>
+            <Printer size={14} />
+            Print / PDF
+          </button>
+          {quotation.status === 'ACCEPTED' && (
+            <button className="btn btn-primary btn-sm" onClick={convertToInvoice} disabled={updating}>
+              <FileText size={14} />
+              Convert to invoice
+            </button>
           )}
+          {['ADMIN', 'ACCOUNT_MANAGER', 'AGENT'].includes(profile.role) && (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={openDeleteModal} disabled={updating}>
+              <Trash2 size={14} />
+              Delete
+            </button>
+          )}
+          {nextStatuses.map((status) => (
+            <button
+              key={status}
+              className={`btn btn-sm ${status === 'ACCEPTED' ? 'btn-primary' : status === 'REJECTED' ? 'btn-danger' : 'btn-outline'}`}
+              onClick={() => updateStatus(status)}
+              disabled={updating}
+            >
+              {status === 'SENT' && <Send size={14} />}
+              {status === 'ACCEPTED' && <CheckCircle size={14} />}
+              Mark as {status.toLowerCase()}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -369,6 +375,7 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
                       <th>Description</th>
                       <th className="num">Qty</th>
                       <th className="num">Unit price</th>
+                      {hasItemDiscounts && <th className="num">Disc %</th>}
                       <th className="num">Amount</th>
                     </tr>
                   </thead>
@@ -378,21 +385,44 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
                         <td>{item.description}</td>
                         <td className="num tabular-nums">{item.qty}</td>
                         <td className="num tabular-nums">{curr} {Number(item.unit_price).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
+                        {hasItemDiscounts && (
+                          <td className="num tabular-nums" style={{ color: Number(item.discount_percent) > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
+                            {Number(item.discount_percent) > 0 ? `${item.discount_percent}%` : '—'}
+                          </td>
+                        )}
                         <td className="num tabular-nums" style={{ fontWeight: 500 }}>{curr} {Number(item.amount).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop: '2px solid var(--border)' }}>
-                      <td colSpan={3} style={{ textAlign: 'right', fontWeight: 500, fontSize: 13, color: 'var(--text-secondary)' }}>Subtotal</td>
+                      <td colSpan={colSpan} style={{ textAlign: 'right', fontWeight: 500, fontSize: 13, color: 'var(--text-secondary)' }}>Subtotal</td>
                       <td className="num tabular-nums" style={{ fontWeight: 600 }}>{curr} {Number(quotation.subtotal).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
+                    {hasOverallDiscount && (
+                      <tr>
+                        <td colSpan={colSpan} style={{ textAlign: 'right', fontSize: 13, color: 'var(--success)', fontWeight: 500 }}>
+                          Discount {quotation.discount_type === 'PERCENTAGE' ? `(${quotation.discount_value}%)` : ''}
+                        </td>
+                        <td className="num tabular-nums" style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>
+                          - {curr} {Number(quotation.discount_amount).toLocaleString('en', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    )}
+                    {hasOverallDiscount && (
+                      <tr>
+                        <td colSpan={colSpan} style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-secondary)' }}>Taxable Subtotal</td>
+                        <td className="num tabular-nums" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {curr} {Number(quotation.subtotal - (quotation.discount_amount || 0)).toLocaleString('en', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    )}
                     <tr>
-                      <td colSpan={3} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({quotation.tax_percent}%)</td>
+                      <td colSpan={colSpan} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({quotation.tax_percent}%)</td>
                       <td className="num tabular-nums" style={{ fontSize: 13 }}>{curr} {Number(quotation.tax_amount).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr style={{ borderTop: '1px solid var(--border)' }}>
-                      <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }}>Total</td>
+                      <td colSpan={colSpan} style={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }}>Total</td>
                       <td className="num tabular-nums" style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{curr} {Number(quotation.total).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                   </tfoot>
@@ -406,17 +436,40 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             <div className="card">
               <div className="card-header"><span className="text-section-header">Summary</span></div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  { label: 'Subtotal', value: quotation.subtotal },
-                  { label: `VAT (${quotation.tax_percent}%)`, value: quotation.tax_amount },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex justify-between">
-                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>
-                    <span className="tabular-nums" style={{ fontSize: 13 }}>
-                      {curr} {Number(value).toLocaleString('en', { minimumFractionDigits: 2 })}
+                <div className="flex justify-between">
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Subtotal</span>
+                  <span className="tabular-nums" style={{ fontSize: 13 }}>
+                    {curr} {Number(quotation.subtotal).toLocaleString('en', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                {hasOverallDiscount && (
+                  <div className="flex justify-between" style={{ color: 'var(--success)' }}>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>
+                      Discount {quotation.discount_type === 'PERCENTAGE' ? `(${quotation.discount_value}%)` : ''}
+                    </span>
+                    <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 600 }}>
+                      - {curr} {Number(quotation.discount_amount).toLocaleString('en', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                ))}
+                )}
+
+                {hasOverallDiscount && (
+                  <div className="flex justify-between">
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taxable Subtotal</span>
+                    <span className="tabular-nums" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {curr} {Number(quotation.subtotal - (quotation.discount_amount || 0)).toLocaleString('en', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({quotation.tax_percent}%)</span>
+                  <span className="tabular-nums" style={{ fontSize: 13 }}>
+                    {curr} {Number(quotation.tax_amount).toLocaleString('en', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
                 <div className="divider" style={{ margin: '4px 0' }} />
                 <div className="flex justify-between">
                   <span style={{ fontWeight: 600 }}>Total</span>

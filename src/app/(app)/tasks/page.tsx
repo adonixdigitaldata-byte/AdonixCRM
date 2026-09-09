@@ -36,11 +36,12 @@ export default async function TasksPage() {
     .select('id, name, company')
     .order('name', { ascending: true })
 
-  // 4. Fetch all team members for assignment
+  // 4. Fetch all team members for assignment (Exclude CLIENTs)
   const { data: profiles } = await supabase
     .from('profiles')
     .select('*')
     .eq('is_active', true)
+    .neq('role', 'CLIENT')
     .order('name', { ascending: true })
 
   return (

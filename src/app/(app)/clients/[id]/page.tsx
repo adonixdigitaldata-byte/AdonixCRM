@@ -26,11 +26,12 @@ export default async function ClientDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // Fetch all active profiles (for manager & employee assignment)
+  // Fetch all active internal staff profiles (exclude CLIENTs for manager & employee assignment)
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, name, email, role, specialization, work_status, avatar_url')
     .eq('is_active', true)
+    .neq('role', 'CLIENT')
     .order('name', { ascending: true })
 
   // Fetch technical tasks for this client
@@ -39,6 +40,7 @@ export default async function ClientDetailPage({ params }: PageProps) {
     .select(`
       *,
       assigned_employee:profiles!assigned_employee_id(id, name, email, role, specialization, work_status),
+      creator:profiles!created_by(id, name),
       updates:client_task_updates(
         id, task_id, author_id, update_type, status_from, status_to, body, attachment_url, created_at,
         author:profiles(id, name, avatar_url)

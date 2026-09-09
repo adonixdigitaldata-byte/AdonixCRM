@@ -549,6 +549,24 @@ textarea.form-input {
 /* ============================================================
    TABLES
    ============================================================ */
+.avatar,
+.avatar-circle {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  text-align: center !important;
+  font-weight: 700 !important;
+  flex-shrink: 0 !important;
+  line-height: 1 !important;
+}
+
+.avatar-sm {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 11px !important;
+}
+
 .table-wrapper {
   width: 100%;
   max-width: 100%;
@@ -2235,7 +2253,7 @@ textarea.form-input {
 
   /* --- Table min-width to avoid column squeezing, excluding compact tables --- */
   .table-wrapper table:not(.table-compact) {
-    min-width: 600px !important;
+    min-width: 750px;
   }
 
   /* --- Compact tables that can scale down on mobile --- */

@@ -657,6 +657,131 @@ drop policy if exists "Authenticated update clients" on clients;
 
 create policy "Authenticated view clients" on clients for select using (auth.uid() is not null);
 create policy "Authenticated insert clients" on clients for insert with check (auth.uid() is not null);
-create policy "Authenticated update clients" on clients for update using (auth.uid() is not null);
+-- ============================================================
+-- PAYROLL & PAYSLIP SYSTEM
+-- ============================================================
+
+create table if not exists employee_salary_profiles (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references profiles(id) on delete cascade unique not null,
+  currency text not null default 'INR' check (currency in ('INR', 'SAR', 'USD')),
+  base_salary numeric(12, 2) not null default 0,
+  joining_date date not null default current_date,
+  designation text,
+  department text default 'Operations',
+  employee_code text,
+  bank_name text,
+  account_number text,
+  ifsc_or_iban text,
+  pan_or_iqama text,
+  default_allowances jsonb default '[]'::jsonb,
+  default_deductions jsonb default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_salary_profiles_profile on employee_salary_profiles(profile_id);
+
+create trigger salary_profiles_updated_at before update on employee_salary_profiles
+  for each row execute function update_updated_at();
+
+alter table employee_salary_profiles enable row level security;
+
+create policy "Admins manage all salary profiles" on employee_salary_profiles for all using (
+  is_admin() or exists (select 1 from profiles where id = auth.uid() and role = 'ADMIN')
+);
+
+create policy "Users view own salary profile" on employee_salary_profiles for select using (
+  profile_id = auth.uid()
+);
+
+create table if not exists payslips (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid references profiles(id) on delete cascade not null,
+  month int not null check (month between 1 and 12),
+  year int not null check (year between 2000 and 2100),
+  financial_year text not null, -- e.g. "2026-2027" or "2025-2026"
+  currency text not null default 'INR' check (currency in ('INR', 'SAR', 'USD')),
+  base_salary numeric(12, 2) not null default 0,
+  earnings_breakdown jsonb not null default '[]'::jsonb,
+  deductions_breakdown jsonb not null default '[]'::jsonb,
+  gross_earnings numeric(12, 2) not null default 0,
+  total_deductions numeric(12, 2) not null default 0,
+  net_pay numeric(12, 2) not null default 0,
+  net_pay_in_words text,
+  working_days int not null default 30,
+  paid_days int not null default 30,
+  lop_days int not null default 0,
+  status text not null default 'PAID' check (status in ('DRAFT', 'PUBLISHED', 'PAID')),
+  payment_date date,
+  period_start_date date,
+  period_end_date date,
+  payment_method text not null default 'BANK_TRANSFER' check (payment_method in ('BANK_TRANSFER', 'CHEQUE', 'CASH', 'UPI', 'WIRE')),
+  designation text,
+  department text,
+  employee_code text,
+  bank_name text,
+  account_number text,
+  ifsc_or_iban text,
+  pan_or_iqama text,
+  joining_date date,
+  notes text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (employee_id, month, year)
+);
+
+create index if not exists idx_payslips_employee on payslips(employee_id);
+create index if not exists idx_payslips_period on payslips(year, month);
+create index if not exists idx_payslips_fy on payslips(financial_year);
+create index if not exists idx_payslips_status on payslips(status);
+
+create trigger payslips_updated_at before update on payslips
+  for each row execute function update_updated_at();
+
+alter table payslips enable row level security;
+
+create policy "Admins manage all payslips" on payslips for all using (
+  is_admin() or exists (select 1 from profiles where id = auth.uid() and role = 'ADMIN')
+);
+
+create policy "Users view own published payslips" on payslips for select using (
+  employee_id = auth.uid() and status in ('PUBLISHED', 'PAID')
+);
 
 
+-- Create employee_salary_history table to track custom salary intervals
+create table if not exists employee_salary_history (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references profiles(id) on delete cascade not null,
+  base_salary numeric(12, 2) not null default 0,
+  currency text not null default 'INR' check (currency in ('INR', 'SAR', 'USD')),
+  start_date date not null,
+  end_date date, -- Null means active until updated/future
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Add indexes for efficient search during generation/lookup
+create index if not exists idx_salary_history_profile on employee_salary_history(profile_id);
+create index if not exists idx_salary_history_dates on employee_salary_history(start_date, end_date);
+
+-- Enable Row Level Security (RLS)
+alter table employee_salary_history enable row level security;
+
+-- Create RLS Policies for management and view operations
+drop policy if exists "Admins manage all salary histories" on employee_salary_history;
+create policy "Admins manage all salary histories" on employee_salary_history 
+  for all using (
+    exists (select 1 from profiles where id = auth.uid() and role = 'ADMIN')
+  );
+
+drop policy if exists "Users view own salary history" on employee_salary_history;
+create policy "Users view own salary history" on employee_salary_history 
+  for select using (
+    profile_id = auth.uid()
+  );
+
+-- Add individual user security PIN for Payroll Vault
+alter table profiles add column if not exists payroll_pin text default '1234';

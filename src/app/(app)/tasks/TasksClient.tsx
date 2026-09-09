@@ -423,7 +423,8 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
         .select(`
           *,
           client:clients(id, name, company),
-          assigned_employee:profiles!assigned_employee_id(id, name, role, specialization, work_status)
+          assigned_employee:profiles!assigned_employee_id(id, name, role, specialization, work_status),
+          creator:profiles!created_by(id, name)
         `)
         .single()
 
@@ -613,16 +614,16 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
 
         {/* Dense Task Table List with Mobile Horizontal Scroll */}
         <div className="card">
-          <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-            <table className="table" style={{ minWidth: 850 }}>
+          <div className="table-wrapper" style={{ border: 'none', borderRadius: 0, overflowX: 'auto' }}>
+            <table className="table" style={{ minWidth: 880 }}>
               <thead>
                 <tr>
-                  <th style={{ width: '30%' }}>Task Deliverable</th>
-                  <th style={{ width: '20%' }}>Client</th>
-                  <th style={{ width: '18%' }}>Assigned Specialist</th>
-                  <th style={{ width: '12%' }}>Target Date</th>
-                  <th style={{ width: '12%' }}>Status</th>
-                  <th style={{ width: '8%', textAlign: 'right' }}>Action</th>
+                  <th style={{ width: '32%', minWidth: 260 }}>Task Deliverable</th>
+                  <th style={{ width: '19%', minWidth: 160 }}>Client</th>
+                  <th style={{ width: '18%', minWidth: 150 }}>Assigned Specialist</th>
+                  <th style={{ width: '12%', minWidth: 110 }}>Target Date</th>
+                  <th style={{ width: '11%', minWidth: 120 }}>Status</th>
+                  <th style={{ width: '8%', minWidth: 80, textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -642,14 +643,14 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                     return (
                       <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedTask(t)}>
                         {/* Task Title & Category */}
-                        <td style={{ maxWidth: 320, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                        <td style={{ minWidth: 260, maxWidth: 360, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
                             <span style={{ fontSize: 18, lineHeight: '20px', flexShrink: 0 }}>{categoryCfg.icon}</span>
                             <div style={{ minWidth: 0, flex: 1, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                               <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal' }}>
                                 {t.title}
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                                 <span style={{
                                   fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4,
                                   background: `${categoryCfg.color}15`, color: categoryCfg.color, flexShrink: 0
@@ -660,8 +661,8 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                                   ● {priorityCfg.label} Priority
                                 </span>
                                 {t.created_at && (
-                                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                                    • Assigned: {format(parseISO(t.created_at), 'dd MMM yyyy, hh:mm a')}
+                                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                    • Assigned{t.creator?.name ? ` by ${t.creator.name}` : ''}: {format(parseISO(t.created_at), 'dd MMM yyyy, hh:mm a')}
                                   </span>
                                 )}
                                 {t.deliverable_link && (
@@ -681,28 +682,28 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                         </td>
 
                         {/* Client */}
-                        <td>
+                        <td style={{ minWidth: 160, maxWidth: 220, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                           <Link
                             href={`/clients/${t.client_id}`}
                             onClick={(e) => e.stopPropagation()}
-                            style={{ fontWeight: 500, color: 'var(--text-primary)', textDecoration: 'none' }}
+                            style={{ fontWeight: 500, color: 'var(--text-primary)', textDecoration: 'none', display: 'block', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                           >
                             <Building2 size={13} style={{ display: 'inline', marginRight: 4, color: 'var(--text-secondary)' }} />
                             {t.client?.name ?? 'Unknown Client'}
                           </Link>
                           {t.client?.company && (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.client.company}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{t.client.company}</div>
                           )}
                         </td>
 
                         {/* Assigned Employee */}
-                        <td>
+                        <td style={{ minWidth: 150 }}>
                           {t.assigned_employee ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <div style={{
                                 width: 26, height: 26, borderRadius: '50%', background: 'var(--accent)',
                                 color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex',
-                                alignItems: 'center', justifyContent: 'center'
+                                alignItems: 'center', justifyContent: 'center', flexShrink: 0
                               }}>
                                 {t.assigned_employee.name.slice(0, 2).toUpperCase()}
                               </div>
@@ -719,7 +720,7 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                         </td>
 
                         {/* Target Due Date */}
-                        <td>
+                        <td style={{ minWidth: 110 }}>
                           {t.due_date ? (
                             <div style={{ fontSize: 13, color: isOverdue ? 'var(--danger)' : 'var(--text-primary)', fontWeight: isOverdue ? 600 : 400 }}>
                               {t.due_date}
@@ -735,7 +736,7 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                         </td>
 
                         {/* Status Select */}
-                        <td onClick={(e) => e.stopPropagation()}>
+                        <td style={{ minWidth: 120 }} onClick={(e) => e.stopPropagation()}>
                           <select
                             className="form-select"
                             value={t.status}
@@ -753,7 +754,7 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                         </td>
 
                         {/* Action / View / Delete */}
-                        <td style={{ textAlign: 'right' }}>
+                        <td style={{ minWidth: 80, textAlign: 'right' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                             <button
                               className="btn btn-ghost btn-sm"
@@ -1158,6 +1159,10 @@ export default function TasksClient({ initialTasks, clients, profiles, currentPr
                     <div>
                       <span className="text-meta">Specialist: </span>
                       <strong>{selectedTask.assigned_employee?.name ?? 'Unassigned'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-meta">Assigned By: </span>
+                      <strong>{selectedTask.creator?.name ?? 'System Admin'}</strong>
                     </div>
                     <div>
                       <span className="text-meta">Assigned Time: </span>

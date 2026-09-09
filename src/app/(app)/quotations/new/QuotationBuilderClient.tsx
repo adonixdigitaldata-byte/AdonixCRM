@@ -12,6 +12,7 @@ interface LineItem {
   description: string
   qty: number
   unit_price: number
+  discount_percent: number
   amount: number
 }
 
@@ -45,8 +46,14 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState('')
   const [taxPercent, setTaxPercent] = useState(15)
-  const DEFAULT_TERMS = `50% Advance Payment – Due upon acceptance of the proposal and before project commencement.
-30% Milestone Payment – Due upon completion of the first review/demo and client approval to proceed.
+
+  // Overall Discount
+  const [discountType, setDiscountType] = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE')
+  const [discountValue, setDiscountValue] = useState<number>(0)
+
+  const DEFAULT_TERMS = `**Payment Milestones**
+50% Advance Payment – Due upon project kickoff to initiate work and secure resources.
+30% Interim Payment – Due upon completion and approval of the design/milestone review.
 20% Final Payment – Due upon final delivery of the project and prior to deployment, handover, or transfer of source files.
 
 **Additional Terms**
@@ -60,22 +67,26 @@ All payments are non-refundable once the corresponding project phase has been co
 
   // Line items
   const [items, setItems] = useState<LineItem[]>([
-    { id: genId(), description: '', qty: 1, unit_price: 0, amount: 0 },
+    { id: genId(), description: '', qty: 1, unit_price: 0, discount_percent: 0, amount: 0 },
   ])
 
   function updateItem(id: string, field: keyof LineItem, value: string | number) {
     setItems(items.map((item) => {
       if (item.id !== id) return item
       const updated = { ...item, [field]: value }
-      if (field === 'qty' || field === 'unit_price') {
-        updated.amount = Number(updated.qty) * Number(updated.unit_price)
+      if (field === 'qty' || field === 'unit_price' || field === 'discount_percent') {
+        const q = Number(updated.qty) || 0
+        const p = Number(updated.unit_price) || 0
+        const d = Math.min(100, Math.max(0, Number(updated.discount_percent) || 0))
+        const gross = q * p
+        updated.amount = Math.max(0, gross - (gross * d) / 100)
       }
       return updated
     }))
   }
 
   function addItem() {
-    setItems([...items, { id: genId(), description: '', qty: 1, unit_price: 0, amount: 0 }])
+    setItems([...items, { id: genId(), description: '', qty: 1, unit_price: 0, discount_percent: 0, amount: 0 }])
   }
 
   function removeItem(id: string) {
@@ -84,8 +95,12 @@ All payments are non-refundable once the corresponding project phase has been co
   }
 
   const subtotal = items.reduce((sum, i) => sum + i.amount, 0)
-  const taxAmount = (subtotal * taxPercent) / 100
-  const total = subtotal + taxAmount
+  const discountAmount = discountType === 'PERCENTAGE'
+    ? (subtotal * (Number(discountValue) || 0)) / 100
+    : Math.min(subtotal, Number(discountValue) || 0)
+  const taxableSubtotal = Math.max(0, subtotal - discountAmount)
+  const taxAmount = (taxableSubtotal * taxPercent) / 100
+  const total = taxableSubtotal + taxAmount
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -146,6 +161,9 @@ All payments are non-refundable once the corresponding project phase has been co
         issue_date: issueDate,
         valid_until: validUntil || null,
         subtotal,
+        discount_type: discountType,
+        discount_value: Number(discountValue) || 0,
+        discount_amount: discountAmount,
         tax_percent: taxPercent,
         tax_amount: taxAmount,
         total,
@@ -165,6 +183,7 @@ All payments are non-refundable once the corresponding project phase has been co
         description: item.description.trim(),
         qty: item.qty,
         unit_price: item.unit_price,
+        discount_percent: item.discount_percent || 0,
         amount: item.amount,
         sort_order: idx,
       }))
@@ -286,14 +305,15 @@ All payments are non-refundable once the corresponding project phase has been co
                   <span className="text-section-header">Line items</span>
                 </div>
                 <div className="hide-mobile" style={{ overflowX: 'auto' }}>
-                  <table className="table" style={{ minWidth: 600 }}>
+                  <table className="table" style={{ minWidth: 620 }}>
                     <thead>
                       <tr>
-                        <th style={{ width: '50%' }}>Description</th>
-                        <th className="num" style={{ width: 80 }}>Qty</th>
-                        <th className="num" style={{ width: 120 }}>Unit price</th>
-                        <th className="num" style={{ width: 120 }}>Amount</th>
-                        <th style={{ width: 40 }}></th>
+                        <th style={{ width: '45%' }}>Description</th>
+                        <th className="num" style={{ width: 70 }}>Qty</th>
+                        <th className="num" style={{ width: 110 }}>Unit price</th>
+                        <th className="num" style={{ width: 85 }}>Disc %</th>
+                        <th className="num" style={{ width: 110 }}>Amount</th>
+                        <th style={{ width: 36 }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -327,6 +347,19 @@ All payments are non-refundable once the corresponding project phase has been co
                               className="form-input"
                               value={item.unit_price}
                               onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                              style={{ textAlign: 'right', border: 'none', borderRadius: 0, padding: '4px 0', fontSize: 13 }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step="0.1"
+                              placeholder="0%"
+                              className="form-input"
+                              value={item.discount_percent || ''}
+                              onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
                               style={{ textAlign: 'right', border: 'none', borderRadius: 0, padding: '4px 0', fontSize: 13 }}
                             />
                           </td>
@@ -376,7 +409,7 @@ All payments are non-refundable once the corresponding project phase has been co
                             style={{ fontSize: 13 }}
                           />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                           <div className="form-group">
                             <label className="form-label" style={{ fontSize: 11 }}>Qty</label>
                             <input
@@ -398,6 +431,20 @@ All payments are non-refundable once the corresponding project phase has been co
                               className="form-input"
                               value={item.unit_price}
                               onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                              style={{ fontSize: 13 }}
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: 11 }}>Disc %</label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step="0.1"
+                              placeholder="0%"
+                              className="form-input"
+                              value={item.discount_percent || ''}
+                              onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
                               style={{ fontSize: 13 }}
                             />
                           </div>
@@ -483,17 +530,76 @@ All payments are non-refundable once the corresponding project phase has been co
                   <span className="text-section-header">Totals ({currency})</span>
                 </div>
                 <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[
-                    { label: 'Subtotal', value: subtotal },
-                    { label: `VAT (${taxPercent}%)`, value: taxAmount },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex justify-between items-center">
-                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>
-                      <span className="tabular-nums" style={{ fontSize: 14 }}>
-                        {currency} {value.toLocaleString('en', { minimumFractionDigits: 2 })}
+                  <div className="flex justify-between items-center">
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Subtotal</span>
+                    <span className="tabular-nums" style={{ fontSize: 14 }}>
+                      {currency} {subtotal.toLocaleString('en', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Proposal Discount Control */}
+                  <div style={{ padding: '8px 10px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                    <div className="flex justify-between items-center" style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Overall Discount</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${discountType === 'PERCENTAGE' ? 'btn-primary' : 'btn-ghost'}`}
+                          onClick={() => setDiscountType('PERCENTAGE')}
+                          style={{ padding: '2px 7px', fontSize: 11, minHeight: 22 }}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${discountType === 'FIXED' ? 'btn-primary' : 'btn-ghost'}`}
+                          onClick={() => setDiscountType('FIXED')}
+                          style={{ padding: '2px 7px', fontSize: 11, minHeight: 22 }}
+                        >
+                          {currency}
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={discountType === 'PERCENTAGE' ? 100 : undefined}
+                      step="0.01"
+                      className="form-input"
+                      placeholder={discountType === 'PERCENTAGE' ? 'Discount %' : `Amount in ${currency}`}
+                      value={discountValue || ''}
+                      onChange={(e) => setDiscountValue(Math.max(0, parseFloat(e.target.value) || 0))}
+                      style={{ fontSize: 12, padding: '4px 8px' }}
+                    />
+                  </div>
+
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between items-center" style={{ color: 'var(--success)' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>
+                        Discount {discountType === 'PERCENTAGE' ? `(${discountValue}%)` : ''}
+                      </span>
+                      <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600 }}>
+                        - {currency} {discountAmount.toLocaleString('en', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
-                  ))}
+                  )}
+
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taxable Subtotal</span>
+                      <span className="tabular-nums" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                        {currency} {taxableSubtotal.toLocaleString('en', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center">
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({taxPercent}%)</span>
+                    <span className="tabular-nums" style={{ fontSize: 14 }}>
+                      {currency} {taxAmount.toLocaleString('en', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
                   <div className="divider" style={{ margin: '8px 0' }} />
                   <div className="flex justify-between items-center">
                     <span style={{ fontSize: 15, fontWeight: 600 }}>Total</span>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { UserPlus, CheckCircle, XCircle, Clock, Search, ChevronRight, Edit2, Shield, User, Briefcase, X, AlertTriangle } from 'lucide-react'
+import { UserPlus, CheckCircle, XCircle, Clock, Search, ChevronRight, ChevronLeft, Edit2, Shield, User, Briefcase, X, AlertTriangle } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { Profile, UserRole, EmployeeSpecialization, WorkStatus } from '@/types/database'
 import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
@@ -25,8 +25,10 @@ interface Props {
   clients?: { id: string; name: string; company?: string | null; email?: string | null }[]
 }
 
-const SPECIALIZATIONS: { key: EmployeeSpecialization; label: string }[] = [
+const SPECIALIZATIONS: { key: string; label: string }[] = [
   { key: 'WEBSITE', label: 'Website Development' },
+  { key: 'SOFTWARE_ENGINEER', label: 'Software Engineer' },
+  { key: 'ANDROID_DEV', label: 'Android Developer' },
   { key: 'SOCIAL_MEDIA', label: 'Social Media Management' },
   { key: 'ADS', label: 'Meta / Google Ads' },
   { key: 'GMB', label: 'GMB & Local SEO' },
@@ -34,7 +36,41 @@ const SPECIALIZATIONS: { key: EmployeeSpecialization; label: string }[] = [
   { key: 'DESIGN', label: 'Graphic & UI Design' },
   { key: 'SEO', label: 'Organic SEO' },
   { key: 'OTHER', label: 'General / Operations' },
+  { key: 'CUSTOM', label: 'Custom / Other...' },
 ]
+
+const AVATAR_GRADIENTS = [
+  'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', // Indigo - Purple
+  'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)', // Sky - Blue
+  'linear-gradient(135deg, #059669 0%, #10b981 100%)', // Emerald - Green
+  'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)', // Amber - Orange
+  'linear-gradient(135deg, #db2777 0%, #ec4899 100%)', // Pink - Rose
+  'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)', // Purple - Violet
+  'linear-gradient(135deg, #ea580c 0%, #f97316 100%)', // Orange
+  'linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)', // Cyan - Teal
+  'linear-gradient(135deg, #e11d48 0%, #f43f5e 100%)', // Rose
+]
+
+function getAvatarBackground(name: string, role?: string): string {
+  if (role === 'ADMIN') return 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)'
+  if (role === 'CLIENT') return 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const index = Math.abs(hash) % AVATAR_GRADIENTS.length
+  return AVATAR_GRADIENTS[index]
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
+}
+
+const PAGE_SIZE = 20
 
 export default function AgentsClient({ agents: initialAgents, agentLeadCounts, currentUserId, clients = [] }: Props) {
   const router = useRouter()
@@ -43,7 +79,8 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('EMPLOYEE')
-  const [inviteSpecialization, setInviteSpecialization] = useState<EmployeeSpecialization>('WEBSITE')
+  const [inviteSpecialization, setInviteSpecialization] = useState<string>('WEBSITE')
+  const [inviteCustomSpecialization, setInviteCustomSpecialization] = useState<string>('')
   const [inviteClientId, setInviteClientId] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteError, setInviteError] = useState('')
@@ -51,12 +88,14 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
   const [resendingEmails, setResendingEmails] = useState<Set<string>>(new Set())
   const [mounted, setMounted] = useState(false)
   const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Edit Role & Specialization Modal State
   const [editUser, setEditUser] = useState<EnrichedAgent | null>(null)
   const [editName, setEditName] = useState<string>('')
   const [editRole, setEditRole] = useState<UserRole>('EMPLOYEE')
   const [editSpecialization, setEditSpecialization] = useState<string>('')
+  const [editCustomSpecialization, setEditCustomSpecialization] = useState<string>('')
   const [editWorkStatus, setEditWorkStatus] = useState<WorkStatus>('AVAILABLE')
   const [editLoading, setEditLoading] = useState(false)
 
@@ -71,6 +110,10 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
     setMounted(true)
   }, [])
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search])
+
   const filteredAgents = useMemo(() => {
     if (!search.trim()) return agents
     const q = search.toLowerCase()
@@ -79,12 +122,24 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
     )
   }, [agents, search])
 
+  const totalPages = Math.ceil(filteredAgents.length / PAGE_SIZE) || 1
+  const safeCurrentPage = Math.min(currentPage, totalPages) || 1
+  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE
+  const endIndex = Math.min(startIndex + PAGE_SIZE, filteredAgents.length)
+  const paginatedAgents = filteredAgents.slice(startIndex, endIndex)
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     if (!inviteEmail.trim() || !inviteName.trim() || inviteLoading) return
     setInviteLoading(true)
     setInviteError('')
     setInviteSuccess('')
+
+    const resolvedSpecialization = inviteRole === 'EMPLOYEE'
+      ? (inviteSpecialization === 'CUSTOM'
+          ? (inviteCustomSpecialization.trim() || 'General / Operations')
+          : (SPECIALIZATIONS.find((s) => s.key === inviteSpecialization)?.label || inviteSpecialization))
+      : null
 
     const res = await fetch('/api/agents/invite', {
       method: 'POST',
@@ -93,7 +148,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
         email: inviteEmail.trim(),
         name: inviteName.trim(),
         role: inviteRole,
-        specialization: inviteRole === 'EMPLOYEE' ? inviteSpecialization : null,
+        specialization: resolvedSpecialization,
         clientId: inviteRole === 'CLIENT' ? inviteClientId : null,
       }),
     })
@@ -109,7 +164,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
           name: inviteName.trim(),
           email: inviteEmail.trim(),
           role: inviteRole,
-          specialization: inviteRole === 'EMPLOYEE' ? inviteSpecialization : null,
+          specialization: resolvedSpecialization,
           work_status: 'AVAILABLE',
           is_active: true,
           avatar_url: null,
@@ -130,6 +185,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
       }
       setInviteEmail('')
       setInviteName('')
+      setInviteCustomSpecialization('')
       setShowInvite(false)
     }
     setInviteLoading(false)
@@ -141,6 +197,12 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
 
     setEditLoading(true)
     try {
+      const resolvedEditSpec = editRole === 'EMPLOYEE'
+        ? (editSpecialization === 'CUSTOM'
+            ? (editCustomSpecialization.trim() || 'General / Operations')
+            : (SPECIALIZATIONS.find((s) => s.key === editSpecialization)?.label || editSpecialization))
+        : null
+
       const res = await fetch('/api/agents/update-role', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -148,7 +210,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
           userId: editUser.id,
           name: editName.trim(),
           role: editRole,
-          specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+          specialization: resolvedEditSpec,
           work_status: editWorkStatus,
         }),
       })
@@ -160,7 +222,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
         ...a,
         name: editName.trim(),
         role: editRole,
-        specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+        specialization: resolvedEditSpec,
         work_status: editWorkStatus,
       } : a))
 
@@ -378,18 +440,32 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                 )}
 
                 {inviteRole === 'EMPLOYEE' && (
-                  <div className="form-group" style={{ flex: '1 1 180px' }}>
-                    <label className="form-label">Department / Specialization</label>
-                    <select
-                      className="form-select"
-                      value={inviteSpecialization}
-                      onChange={(e) => setInviteSpecialization(e.target.value as EmployeeSpecialization)}
-                    >
-                      {SPECIALIZATIONS.map((s) => (
-                        <option key={s.key} value={s.key}>{s.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <>
+                    <div className="form-group" style={{ flex: '1 1 180px' }}>
+                      <label className="form-label">Department / Specialization</label>
+                      <select
+                        className="form-select"
+                        value={inviteSpecialization}
+                        onChange={(e) => setInviteSpecialization(e.target.value)}
+                      >
+                        {SPECIALIZATIONS.map((s) => (
+                          <option key={s.key} value={s.key}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {inviteSpecialization === 'CUSTOM' && (
+                      <div className="form-group" style={{ flex: '1 1 200px' }}>
+                        <label className="form-label form-label-required">Custom Specialization Title</label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. Flutter Developer, Cloud Architect"
+                          value={inviteCustomSpecialization}
+                          onChange={(e) => setInviteCustomSpecialization(e.target.value)}
+                          required
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
                 <div className="flex gap-2" style={{ paddingBottom: 1 }}>
                   <button type="button" className="btn btn-outline" onClick={() => setShowInvite(false)}>
@@ -440,7 +516,7 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                   </td>
                 </tr>
               ) : (
-                filteredAgents.map((agent) => {
+                paginatedAgents.map((agent) => {
                   const isPending = !agent.last_sign_in_at
 
                   return (
@@ -449,54 +525,71 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                       className="clickable"
                       onClick={() => {
                         if (agent.role === 'CLIENT') {
-                          const clientId = (agent as any).client_id || clients.find((c) =>
-                            (c.email && agent.email && c.email.toLowerCase() === agent.email.toLowerCase()) ||
-                            (c.name && agent.name && c.name.toLowerCase() === agent.name.toLowerCase())
-                          )?.id
-
-                          if (clientId) {
-                            router.push(`/clients/${clientId}`)
-                            return
+                          if (agent.client_id) {
+                            router.push(`/clients/${agent.client_id}`)
+                          } else {
+                            router.push(`/clients?search=${encodeURIComponent(agent.email || agent.name)}`)
                           }
-                          router.push('/clients')
-                          return
+                        } else {
+                          router.push(`/settings/agents/${agent.id}`)
                         }
-                        router.push(`/settings/agents/${agent.id}`)
                       }}
-                      style={{ cursor: 'pointer' }}
                     >
+                      {/* Name & Email */}
                       <td>
-                        <div className="flex items-center gap-2">
-                          <div className="avatar avatar-sm" style={{ background: 'var(--accent)', color: '#fff', fontWeight: 700 }}>
-                            {agent.name.slice(0, 2).toUpperCase()}
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="avatar-circle"
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textAlign: 'center',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              background: getAvatarBackground(agent.name, agent.role),
+                              color: '#ffffff',
+                              flexShrink: 0,
+                              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                              letterSpacing: '0.02em',
+                            }}
+                          >
+                            {getInitials(agent.name)}
                           </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          <div>
+                            <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
                               {agent.name}
                             </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            <div className="text-meta" style={{ fontSize: 11 }}>
                               {agent.email}
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Role Pill */}
+                      {/* Role Badge */}
                       <td>
-                        <span className="badge" style={{
-                          background: agent.role === 'ADMIN' ? '#EFF6FF' : agent.role === 'ACCOUNT_MANAGER' ? '#F3E8FF' : agent.role === 'AGENT' ? '#DCFCE7' : agent.role === 'CLIENT' ? '#EEF2FF' : '#F4F4F5',
-                          color: agent.role === 'ADMIN' ? '#2563EB' : agent.role === 'ACCOUNT_MANAGER' ? '#7E22CE' : agent.role === 'AGENT' ? '#15803D' : agent.role === 'CLIENT' ? '#4F46E5' : '#52525B',
-                          fontSize: 11, fontWeight: 600, border: '1px solid var(--border)',
-                        }}>
-                          {agent.role === 'ADMIN' ? 'Admin' : agent.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : agent.role === 'AGENT' ? 'Sales Agent' : agent.role === 'CLIENT' ? 'Client Portal' : 'Employee'}
+                        <span className={`badge ${
+                          agent.role === 'ADMIN' ? 'badge-primary' :
+                          agent.role === 'ACCOUNT_MANAGER' ? 'badge-indigo' :
+                          agent.role === 'EMPLOYEE' ? 'badge-secondary' :
+                          agent.role === 'CLIENT' ? 'badge-info' : 'badge-success'
+                        }`}>
+                          {agent.role === 'ADMIN' && <Shield size={10} style={{ marginRight: 3, display: 'inline' }} />}
+                          {agent.role === 'ACCOUNT_MANAGER' && <Briefcase size={10} style={{ marginRight: 3, display: 'inline' }} />}
+                          {agent.role === 'EMPLOYEE' && <User size={10} style={{ marginRight: 3, display: 'inline' }} />}
+                          {agent.role === 'CLIENT' ? 'Client Portal' : (agent.role === 'AGENT' ? 'Sales Agent' : agent.role === 'EMPLOYEE' ? 'Employee' : agent.role === 'ACCOUNT_MANAGER' ? 'Account Manager' : 'Admin')}
                         </span>
                       </td>
 
                       {/* Specialization */}
                       <td>
                         {agent.specialization ? (
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>
-                            {SPECIALIZATIONS.find((s) => s.key === agent.specialization)?.label || agent.specialization}
+                          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent)' }}>
+                            {SPECIALIZATIONS.find((s) => s.key === agent.specialization || s.label === agent.specialization)?.label || agent.specialization}
                           </span>
                         ) : (
                           <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>General</span>
@@ -505,26 +598,47 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
 
                       {/* Work Status */}
                       <td>
-                        <span style={{
-                          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12,
-                          background: agent.work_status === 'BUSY' ? '#FEF3C7' : agent.work_status === 'ON_LEAVE' ? '#FEE2E2' : '#DCFCE7',
-                          color: agent.work_status === 'BUSY' ? '#D97706' : agent.work_status === 'ON_LEAVE' ? '#B91C1C' : '#15803D',
-                          whiteSpace: 'nowrap',
-                          display: 'inline-block'
-                        }}>
-                          ● {agent.work_status || 'AVAILABLE'}
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color:
+                              agent.work_status === 'AVAILABLE'
+                                ? 'var(--success)'
+                                : agent.work_status === 'BUSY'
+                                ? 'var(--warning)'
+                                : 'var(--text-tertiary)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              backgroundColor:
+                                agent.work_status === 'AVAILABLE'
+                                  ? 'var(--success)'
+                                  : agent.work_status === 'BUSY'
+                                  ? 'var(--warning)'
+                                  : 'var(--text-tertiary)',
+                            }}
+                          />
+                          {agent.work_status === 'AVAILABLE' ? 'AVAILABLE' : agent.work_status === 'BUSY' ? 'BUSY' : 'ON LEAVE'}
                         </span>
                       </td>
 
                       {/* Account Status */}
                       <td>
                         {!agent.is_active ? (
-                          <span className="badge badge-danger">
-                            Inactive
+                          <span className="badge badge-danger" style={{ background: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', borderColor: 'rgba(239, 68, 68, 0.25)' }}>
+                            Deactivated
                           </span>
                         ) : isPending ? (
-                          <span className="badge badge-warning" title="Team member hasn't logged in yet">
-                            Invite pending
+                          <span className="badge badge-warning">
+                            Pending
                           </span>
                         ) : (
                           <span className="badge badge-success">
@@ -534,18 +648,18 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                       </td>
 
                       {/* Last Active */}
-                      <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {!mounted ? (
-                          <span style={{ color: 'var(--text-tertiary)' }}>—</span>
-                        ) : agent.last_seen_at ? (
-                          formatDistanceToNow(new Date(agent.last_seen_at), { addSuffix: true })
-                        ) : (
-                          <span style={{ color: 'var(--text-tertiary)' }}>Never</span>
-                        )}
+                      <td>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {agent.last_sign_in_at && mounted
+                            ? formatDistanceToNow(new Date(agent.last_sign_in_at), { addSuffix: true })
+                            : isPending
+                            ? 'Never'
+                            : '—'}
+                        </span>
                       </td>
 
                       {/* Actions */}
-                      <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                      <td style={{ textAlign: 'right' }}>
                         <div className="flex items-center gap-1 justify-end">
                           <button
                             className="btn btn-outline btn-xs"
@@ -566,7 +680,17 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                                 setEditUser(agent)
                                 setEditName(agent.name)
                                 setEditRole(agent.role)
-                                setEditSpecialization(agent.specialization || 'WEBSITE')
+                                const found = SPECIALIZATIONS.find((s) => s.key === agent.specialization || s.label === agent.specialization)
+                                if (found && found.key !== 'CUSTOM') {
+                                  setEditSpecialization(found.key)
+                                  setEditCustomSpecialization('')
+                                } else if (agent.specialization) {
+                                  setEditSpecialization('CUSTOM')
+                                  setEditCustomSpecialization(agent.specialization)
+                                } else {
+                                  setEditSpecialization('WEBSITE')
+                                  setEditCustomSpecialization('')
+                                }
                                 setEditWorkStatus(agent.work_status || 'AVAILABLE')
                               }}
                               title="Edit Profile & Role"
@@ -608,6 +732,48 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {filteredAgents.length > PAGE_SIZE && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: 16,
+              padding: '8px 4px',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              Showing {startIndex + 1} to {endIndex} of {filteredAgents.length} team members
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-xs"
+                disabled={safeCurrentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <ChevronLeft size={14} /> Previous
+              </button>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '0 4px' }}>
+                Page {safeCurrentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                className="btn btn-outline btn-xs"
+                disabled={safeCurrentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* EDIT ROLE & SPECIALIZATION MODAL */}
@@ -648,18 +814,32 @@ export default function AgentsClient({ agents: initialAgents, agentLeadCounts, c
                 </div>
 
                 {editRole === 'EMPLOYEE' && (
-                  <div className="form-group">
-                    <label className="form-label">Department / Technical Specialization</label>
-                    <select
-                      className="form-select"
-                      value={editSpecialization}
-                      onChange={(e) => setEditSpecialization(e.target.value)}
-                    >
-                      {SPECIALIZATIONS.map((s) => (
-                        <option key={s.key} value={s.key}>{s.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Department / Technical Specialization</label>
+                      <select
+                        className="form-select"
+                        value={editSpecialization}
+                        onChange={(e) => setEditSpecialization(e.target.value)}
+                      >
+                        {SPECIALIZATIONS.map((s) => (
+                          <option key={s.key} value={s.key}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {editSpecialization === 'CUSTOM' && (
+                      <div className="form-group">
+                        <label className="form-label form-label-required">Custom Specialization Title</label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. Flutter Developer, Cloud Architect"
+                          value={editCustomSpecialization}
+                          onChange={(e) => setEditCustomSpecialization(e.target.value)}
+                          required
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
 
                 <div className="form-group">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -163,11 +163,37 @@ function KanbanColumn({
   )
 }
 
+function getOrderedStages(stagesList: LeadStage[]) {
+  if (!stagesList || stagesList.length === 0) return []
+  const followUpIndex = stagesList.findIndex(
+    (s) => s.key === 'followup' || s.label.toLowerCase().replace(/[^a-z]/g, '') === 'followup'
+  )
+  const noReplyIndex = stagesList.findIndex(
+    (s) => s.key === 'no_reply' || s.label.toLowerCase().includes('no reply')
+  )
+  if (followUpIndex === -1 || noReplyIndex === -1) return stagesList
+
+  const copy = [...stagesList]
+  const [followUpStage] = copy.splice(followUpIndex, 1)
+  const targetIndex = copy.findIndex(
+    (s) => s.key === 'no_reply' || s.label.toLowerCase().includes('no reply')
+  )
+  copy.splice(targetIndex + 1, 0, followUpStage)
+  return copy
+}
+
 export default function KanbanBoard({ leads, stages, loading, onLeadMoved, currentUserId }: Props) {
+  const orderedStages = useMemo(() => getOrderedStages(stages), [stages])
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
-  const [selectedStageId, setSelectedStageId] = useState<string>(stages[0]?.id ?? '')
+  const [selectedStageId, setSelectedStageId] = useState<string>(orderedStages[0]?.id ?? '')
   const boardRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
+
+  useEffect(() => {
+    if (orderedStages.length > 0 && !selectedStageId) {
+      setSelectedStageId(orderedStages[0].id)
+    }
+  }, [orderedStages, selectedStageId])
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -247,7 +273,7 @@ export default function KanbanBoard({ leads, stages, loading, onLeadMoved, curre
   if (loading) {
     return (
       <div className="kanban-root">
-        {stages.map((s) => (
+        {orderedStages.map((s) => (
           <div key={s.id} className="kanban-column" style={{ borderTop: `3px solid ${s.color_hex}` }}>
             <div className="kanban-column-header">
               <span className="kanban-column-title">{s.label}</span>
@@ -286,7 +312,7 @@ export default function KanbanBoard({ leads, stages, loading, onLeadMoved, curre
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        {stages.map((s) => {
+        {orderedStages.map((s) => {
           const count = getLeadsForStage(s.id).length
           const isSelected = selectedStageId === s.id
           return (
@@ -325,7 +351,7 @@ export default function KanbanBoard({ leads, stages, loading, onLeadMoved, curre
       </div>
 
       <div className="kanban-root" ref={boardRef}>
-        {stages.map((stage) => (
+        {orderedStages.map((stage) => (
           <KanbanColumn
             key={stage.id}
             stage={stage}

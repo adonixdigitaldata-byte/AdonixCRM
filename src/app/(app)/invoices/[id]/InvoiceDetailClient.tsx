@@ -83,6 +83,9 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
   const payAmountInputRef = useRef<HTMLInputElement>(null)
 
   const curr = invoice.currency ?? 'SAR'
+  const hasItemDiscounts = (invoice.items ?? []).some((i: any) => Number(i.discount_percent) > 0)
+  const discountAmount = Number(invoice.discount_amount) || 0
+  const taxableSubtotal = Math.max(0, Number(invoice.subtotal) - discountAmount)
   const balance = Number(invoice.total) - Number(invoice.amount_paid)
 
   const isOverdue = (() => {
@@ -504,6 +507,7 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                       <th>Description</th>
                       <th className="num">Qty</th>
                       <th className="num">Unit price</th>
+                      {hasItemDiscounts && <th className="num">Disc %</th>}
                       <th className="num">Amount</th>
                     </tr>
                   </thead>
@@ -513,21 +517,44 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                         <td>{item.description}</td>
                         <td className="num tabular-nums">{item.qty}</td>
                         <td className="num tabular-nums">{curr} {Number(item.unit_price).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
+                        {hasItemDiscounts && (
+                          <td className="num tabular-nums" style={{ color: Number(item.discount_percent) > 0 ? 'var(--success)' : 'var(--text-secondary)' }}>
+                            {Number(item.discount_percent) > 0 ? `${item.discount_percent}%` : '—'}
+                          </td>
+                        )}
                         <td className="num tabular-nums" style={{ fontWeight: 500 }}>{curr} {Number(item.amount).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop: '2px solid var(--border)' }}>
-                      <td colSpan={3} style={{ textAlign: 'right', fontWeight: 500, fontSize: 13, color: 'var(--text-secondary)' }}>Subtotal</td>
+                      <td colSpan={hasItemDiscounts ? 4 : 3} style={{ textAlign: 'right', fontWeight: 500, fontSize: 13, color: 'var(--text-secondary)' }}>Subtotal</td>
                       <td className="num tabular-nums" style={{ fontWeight: 600 }}>{curr} {Number(invoice.subtotal).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
+                    {discountAmount > 0 && (
+                      <tr style={{ color: 'var(--success)' }}>
+                        <td colSpan={hasItemDiscounts ? 4 : 3} style={{ textAlign: 'right', fontSize: 13, fontWeight: 500 }}>
+                          Discount {invoice.discount_type === 'PERCENTAGE' ? `(${invoice.discount_value}%)` : ''}
+                        </td>
+                        <td className="num tabular-nums" style={{ fontSize: 13, fontWeight: 600 }}>
+                          - {curr} {discountAmount.toLocaleString('en', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    )}
+                    {discountAmount > 0 && (
+                      <tr>
+                        <td colSpan={hasItemDiscounts ? 4 : 3} style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-secondary)' }}>Taxable Subtotal</td>
+                        <td className="num tabular-nums" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                          {curr} {taxableSubtotal.toLocaleString('en', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    )}
                     <tr>
-                      <td colSpan={3} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({invoice.tax_percent}%)</td>
+                      <td colSpan={hasItemDiscounts ? 4 : 3} style={{ textAlign: 'right', fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({invoice.tax_percent}%)</td>
                       <td className="num tabular-nums" style={{ fontSize: 13 }}>{curr} {Number(invoice.tax_amount).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr style={{ borderTop: '1px solid var(--border)' }}>
-                      <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }}>Total</td>
+                      <td colSpan={hasItemDiscounts ? 4 : 3} style={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }}>Total</td>
                       <td className="num tabular-nums" style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{curr} {Number(invoice.total).toLocaleString('en', { minimumFractionDigits: 2 })}</td>
                     </tr>
                   </tfoot>
@@ -588,17 +615,36 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
             <div className="card">
               <div className="card-header"><span className="text-section-header">Summary</span></div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  { label: 'Subtotal', value: invoice.subtotal, color: undefined },
-                  { label: `VAT (${invoice.tax_percent}%)`, value: invoice.tax_amount, color: undefined },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="flex justify-between">
-                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>
-                    <span className="tabular-nums" style={{ fontSize: 13, color }}>
-                      {curr} {Number(value).toLocaleString('en', { minimumFractionDigits: 2 })}
+                <div className="flex justify-between">
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Subtotal</span>
+                  <span className="tabular-nums" style={{ fontSize: 13 }}>
+                    {curr} {Number(invoice.subtotal).toLocaleString('en', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between" style={{ color: 'var(--success)' }}>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>
+                      Discount {invoice.discount_type === 'PERCENTAGE' ? `(${invoice.discount_value}%)` : ''}
+                    </span>
+                    <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 600 }}>
+                      - {curr} {discountAmount.toLocaleString('en', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                ))}
+                )}
+                {discountAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taxable Subtotal</span>
+                    <span className="tabular-nums" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {curr} {taxableSubtotal.toLocaleString('en', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({invoice.tax_percent}%)</span>
+                  <span className="tabular-nums" style={{ fontSize: 13 }}>
+                    {curr} {Number(invoice.tax_amount).toLocaleString('en', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
                 <div className="divider" style={{ margin: '4px 0' }} />
                 <div className="flex justify-between">
                   <span style={{ fontWeight: 600 }}>Total</span>

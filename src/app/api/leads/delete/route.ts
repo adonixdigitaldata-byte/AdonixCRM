@@ -15,8 +15,9 @@ export async function POST(request: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden: Only administrators can delete leads' }, { status: 403 })
+  const allowedRoles = ['ADMIN', 'ACCOUNT_MANAGER', 'AGENT']
+  if (!profile || !allowedRoles.includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden: Only administrators, account managers, and sales agents can delete leads' }, { status: 403 })
   }
 
   const { leadId } = await request.json()

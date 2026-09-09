@@ -94,6 +94,20 @@ function activityLabel(type: string, meta: any): string {
   }
 }
 
+const SPECIALIZATIONS: { key: string; label: string }[] = [
+  { key: 'WEBSITE', label: 'Website Development' },
+  { key: 'SOFTWARE_ENGINEER', label: 'Software Engineer' },
+  { key: 'ANDROID_DEV', label: 'Android Developer' },
+  { key: 'SOCIAL_MEDIA', label: 'Social Media Management' },
+  { key: 'ADS', label: 'Meta / Google Ads' },
+  { key: 'GMB', label: 'GMB & Local SEO' },
+  { key: 'VIDEO_AI', label: 'AI Video & Content' },
+  { key: 'DESIGN', label: 'Graphic & UI Design' },
+  { key: 'SEO', label: 'Organic SEO' },
+  { key: 'OTHER', label: 'General / Operations' },
+  { key: 'CUSTOM', label: 'Custom / Other...' },
+]
+
 export default function AgentDetailClient({
   agent,
   leads,
@@ -125,6 +139,7 @@ export default function AgentDetailClient({
   const [editName, setEditName] = useState(agent.name)
   const [editRole, setEditRole] = useState(agent.role)
   const [editSpecialization, setEditSpecialization] = useState(agent.specialization || '')
+  const [editCustomSpecialization, setEditCustomSpecialization] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
 
   async function handleSaveProfile(e: React.FormEvent) {
@@ -133,6 +148,12 @@ export default function AgentDetailClient({
 
     setSavingProfile(true)
     try {
+      const resolvedEditSpec = editRole === 'EMPLOYEE'
+        ? (editSpecialization === 'CUSTOM'
+            ? (editCustomSpecialization.trim() || 'General / Operations')
+            : (SPECIALIZATIONS.find((s) => s.key === editSpecialization)?.label || editSpecialization))
+        : null
+
       const res = await fetch('/api/agents/update-role', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,7 +161,7 @@ export default function AgentDetailClient({
           userId: agent.id,
           name: editName.trim(),
           role: editRole,
-          specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+          specialization: resolvedEditSpec,
         }),
       })
 
@@ -151,7 +172,7 @@ export default function AgentDetailClient({
         ...prev,
         name: editName.trim(),
         role: editRole as any,
-        specialization: editRole === 'EMPLOYEE' ? editSpecialization : null,
+        specialization: resolvedEditSpec,
       }))
 
       setResetMsg({ text: `User profile for "${editName.trim()}" updated successfully!`, type: 'success' })
@@ -485,7 +506,17 @@ export default function AgentDetailClient({
               onClick={() => {
                 setEditName(agentState.name)
                 setEditRole(agentState.role)
-                setEditSpecialization(agentState.specialization || '')
+                const found = SPECIALIZATIONS.find((s) => s.key === agentState.specialization || s.label === agentState.specialization)
+                if (found && found.key !== 'CUSTOM') {
+                  setEditSpecialization(found.key)
+                  setEditCustomSpecialization('')
+                } else if (agentState.specialization) {
+                  setEditSpecialization('CUSTOM')
+                  setEditCustomSpecialization(agentState.specialization)
+                } else {
+                  setEditSpecialization('WEBSITE')
+                  setEditCustomSpecialization('')
+                }
                 setShowEditModal(true)
               }}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
@@ -1687,22 +1718,32 @@ export default function AgentDetailClient({
                 </div>
 
                 {editRole === 'EMPLOYEE' && (
-                  <div className="form-group">
-                    <label className="form-label">Technical Specialization</label>
-                    <select
-                      className="form-select"
-                      value={editSpecialization}
-                      onChange={(e) => setEditSpecialization(e.target.value)}
-                    >
-                      <option value="WEBSITE">Website Development</option>
-                      <option value="SOCIAL_MEDIA">Social Media</option>
-                      <option value="ADS">Meta / Google Ads</option>
-                      <option value="GMB">GMB / Local SEO</option>
-                      <option value="VIDEO_AI">Video &amp; AI Production</option>
-                      <option value="DESIGN">Graphic Design</option>
-                      <option value="SEO">SEO Campaign</option>
-                    </select>
-                  </div>
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Technical Specialization</label>
+                      <select
+                        className="form-select"
+                        value={editSpecialization}
+                        onChange={(e) => setEditSpecialization(e.target.value)}
+                      >
+                        {SPECIALIZATIONS.map((s) => (
+                          <option key={s.key} value={s.key}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {editSpecialization === 'CUSTOM' && (
+                      <div className="form-group">
+                        <label className="form-label form-label-required">Custom Specialization Title</label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. Flutter Developer, Cloud Architect"
+                          value={editCustomSpecialization}
+                          onChange={(e) => setEditCustomSpecialization(e.target.value)}
+                          required
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

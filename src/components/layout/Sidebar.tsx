@@ -21,6 +21,7 @@ import {
   UserCheck,
   Send,
   Share2,
+  Banknote,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -35,6 +36,7 @@ const adminNav = [
       { href: '/leads', label: 'Leads', icon: Users },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
       { href: '/tasks', label: 'Tasks & Operations', icon: CheckSquare },
+      { href: '/payslips', label: 'My Payslips', icon: FileText },
     ],
   },
   {
@@ -49,6 +51,7 @@ const adminNav = [
     section: 'Management',
     items: [
       { href: '/settings/agents', label: 'Team & Staff', icon: UserCheck },
+      { href: '/payroll', label: 'Payroll & Salaries', icon: Banknote },
       { href: '/settings/import', label: 'Import leads', icon: Upload },
     ],
   },
@@ -70,6 +73,7 @@ const accountManagerNav = [
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
       { href: '/clients', label: 'Clients', icon: Building2 },
+      { href: '/payslips', label: 'My Payslips', icon: FileText },
     ],
   },
 ]
@@ -90,6 +94,7 @@ const agentNav = [
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
       { href: '/clients', label: 'Clients', icon: Building2 },
+      { href: '/payslips', label: 'My Payslips', icon: FileText },
     ],
   },
 ]
@@ -100,6 +105,7 @@ const employeeNav = [
     items: [
       { href: '/tasks?tab=MY', label: 'My Tasks', icon: CheckSquare },
       { href: '/clients', label: 'Assigned Clients', icon: Building2 },
+      { href: '/payslips', label: 'My Payslips', icon: FileText },
     ],
   },
 ]

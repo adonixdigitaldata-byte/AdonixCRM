@@ -13,20 +13,32 @@ interface Props {
   stages: LeadStage[]
   campaigns: { id: string; name: string }[]
   agents: { id: string; name: string }[]
+  availableMonths?: { value: string; label: string; count: number }[]
   initialSearchParams: Record<string, string | undefined>
 }
 
 export type ViewMode = 'kanban' | 'list'
 
-export default function LeadsClient({ profile, stages, campaigns, agents, initialSearchParams }: Props) {
+export default function LeadsClient({
+  profile,
+  stages,
+  campaigns,
+  agents,
+  availableMonths: initialAvailableMonths = [],
+  initialSearchParams,
+}: Props) {
   const [view, setView] = useState<ViewMode>('kanban')
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(initialSearchParams.action === 'add')
 
+  // Available months where leads actually exist
+  const [availableMonths, setAvailableMonths] = useState(initialAvailableMonths)
+
   // Filters
   const [search, setSearch] = useState('')
-  const [filterCampaign, setFilterCampaign] = useState('')
+  const [filterMonth, setFilterMonth] = useState(initialSearchParams.month || '')
+  const [filterCampaign, setFilterCampaign] = useState(initialSearchParams.campaign_id || '')
   const [filterAdSet, setFilterAdSet] = useState('')
   const [filterAd, setFilterAd] = useState('')
   const [filterSource, setFilterSource] = useState('')
@@ -52,6 +64,17 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
       `)
       .order('created_at', { ascending: false })
 
+    if (filterMonth) {
+      const [yearStr, monthStr] = filterMonth.split('-')
+      const year = parseInt(yearStr, 10)
+      const month = parseInt(monthStr, 10)
+      if (!isNaN(year) && !isNaN(month)) {
+        // Start of month (inclusive) and start of next month (exclusive) in user's local timezone
+        const startOfMonth = new Date(year, month - 1, 1, 0, 0, 0, 0).toISOString()
+        const startOfNextMonth = new Date(year, month, 1, 0, 0, 0, 0).toISOString()
+        query = query.gte('created_at', startOfMonth).lt('created_at', startOfNextMonth)
+      }
+    }
     if (filterCampaign) query = query.eq('campaign_id', filterCampaign)
     if (filterAdSet) query = query.eq('ad_set_id', filterAdSet)
     if (filterAd) query = query.eq('ad_id', filterAd)
@@ -70,7 +93,7 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
     const { data } = await query
     setLeads((data as Lead[]) ?? [])
     setLoading(false)
-  }, [filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage, search, profile])
+  }, [filterMonth, filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage, search, profile])
 
   useEffect(() => {
     fetchLeads()
@@ -107,10 +130,43 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
   }, [filterAdSet])
 
   const activeFilterCount = [
-    filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage
+    filterMonth, filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage
   ].filter(Boolean).length
 
+  const refreshAvailableMonths = useCallback(async () => {
+    let q = supabase.from('leads').select('created_at')
+    if (profile.role === 'AGENT') {
+      q = q.eq('assigned_agent_id', profile.id)
+    }
+    const { data } = await q
+    if (data) {
+      const monthMap = new Map<string, number>()
+      for (const item of data) {
+        if (!item.created_at) continue
+        const d = new Date(item.created_at)
+        if (isNaN(d.getTime())) continue
+        const y = d.getFullYear()
+        const m = String(d.getMonth() + 1).padStart(2, '0')
+        const key = `${y}-${m}`
+        monthMap.set(key, (monthMap.get(key) || 0) + 1)
+      }
+      const months = Array.from(monthMap.entries()).map(([value, count]) => {
+        const [y, m] = value.split('-')
+        const d = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1)
+        const label = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        return {
+          value,
+          label: `${label} (${count})`,
+          count,
+        }
+      })
+      months.sort((a, b) => b.value.localeCompare(a.value))
+      setAvailableMonths(months)
+    }
+  }, [profile.id, profile.role, supabase])
+
   function clearAllFilters() {
+    setFilterMonth('')
     setFilterCampaign('')
     setFilterAdSet('')
     setFilterAd('')
@@ -192,6 +248,28 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
           )}
         </div>
 
+        {/* Month - Only shown when leads exist */}
+        {availableMonths.length > 0 && (
+          <select
+            className="filter-select"
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            style={
+              filterMonth
+                ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600 }
+                : undefined
+            }
+            title="Filter leads month-wise"
+          >
+            <option value="">All months</option>
+            {availableMonths.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        )}
+
         {/* Campaign cascade */}
         <select
           className="filter-select"
@@ -265,7 +343,9 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
             onChange={(e) => setFilterStage(e.target.value)}
           >
             <option value="">All stages</option>
-            {/* stages imported via prop */}
+            {stages.map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
           </select>
         )}
 
@@ -298,9 +378,13 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
           <LeadsTable
             leads={leads}
             loading={loading}
-            onRefresh={fetchLeads}
+            onRefresh={() => {
+              fetchLeads()
+              refreshAvailableMonths()
+            }}
             agents={agents}
             isAdmin={profile.role === 'ADMIN'}
+            userRole={profile.role}
           />
         </div>
       )}
@@ -316,6 +400,7 @@ export default function LeadsClient({ profile, stages, campaigns, agents, initia
           onSuccess={() => {
             setShowAddModal(false)
             fetchLeads()
+            refreshAvailableMonths()
           }}
         />
       )}
