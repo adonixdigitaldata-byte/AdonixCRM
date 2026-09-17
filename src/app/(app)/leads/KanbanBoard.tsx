@@ -165,20 +165,38 @@ function KanbanColumn({
 
 function getOrderedStages(stagesList: LeadStage[]) {
   if (!stagesList || stagesList.length === 0) return []
-  const followUpIndex = stagesList.findIndex(
+  const copy = [...stagesList]
+
+  // 1. Ensure follow-up is placed right after no-reply
+  const followUpIndex = copy.findIndex(
     (s) => s.key === 'followup' || s.label.toLowerCase().replace(/[^a-z]/g, '') === 'followup'
   )
-  const noReplyIndex = stagesList.findIndex(
+  const noReplyIndex = copy.findIndex(
     (s) => s.key === 'no_reply' || s.label.toLowerCase().includes('no reply')
   )
-  if (followUpIndex === -1 || noReplyIndex === -1) return stagesList
+  if (followUpIndex !== -1 && noReplyIndex !== -1) {
+    const [followUpStage] = copy.splice(followUpIndex, 1)
+    const targetIndex = copy.findIndex(
+      (s) => s.key === 'no_reply' || s.label.toLowerCase().includes('no reply')
+    )
+    copy.splice(targetIndex + 1, 0, followUpStage)
+  }
 
-  const copy = [...stagesList]
-  const [followUpStage] = copy.splice(followUpIndex, 1)
-  const targetIndex = copy.findIndex(
-    (s) => s.key === 'no_reply' || s.label.toLowerCase().includes('no reply')
+  // 2. Ensure junk leads is placed right after lost
+  const junkIndex = copy.findIndex(
+    (s) => s.key === 'junk_leads' || s.key === 'junk' || s.label.toLowerCase().includes('junk')
   )
-  copy.splice(targetIndex + 1, 0, followUpStage)
+  const lostIndex = copy.findIndex(
+    (s) => s.key === 'lost' || s.label.toLowerCase() === 'lost'
+  )
+  if (junkIndex !== -1 && lostIndex !== -1) {
+    const [junkStage] = copy.splice(junkIndex, 1)
+    const targetIndex = copy.findIndex(
+      (s) => s.key === 'lost' || s.label.toLowerCase() === 'lost'
+    )
+    copy.splice(targetIndex + 1, 0, junkStage)
+  }
+
   return copy
 }
 

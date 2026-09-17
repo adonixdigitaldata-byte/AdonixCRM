@@ -74,12 +74,13 @@ insert into lead_stages (key, label, sort_order, color_hex) values
   ('new',          'New',          1, '#0284C7'),
   ('contacted',    'Contacted',    2, '#D97706'),
   ('no_reply',     'No Reply',     3, '#64748B'),
-  ('qualified',    'Qualified',    4, '#7C3AED'),
-  ('proposal',     'Proposal',     5, '#DB2777'),
-  ('negotiation',  'Negotiation',  6, '#EA580C'),
-  ('won',          'Won',          7, '#16A34A'),
-  ('lost',         'Lost',         8, '#DC2626'),
-  ('followup',     'Follow-up',    9, '#0F766E')
+  ('followup',     'Follow-up',    4, '#0F766E'),
+  ('qualified',    'Qualified',    5, '#7C3AED'),
+  ('proposal',     'Proposal',     6, '#DB2777'),
+  ('negotiation',  'Negotiation',  7, '#EA580C'),
+  ('won',          'Won',          8, '#16A34A'),
+  ('lost',         'Lost',         9, '#DC2626'),
+  ('junk_leads',   'Junk Leads',   10, '#71717A')
 on conflict (key) do nothing;
 
 -- ============================================================
