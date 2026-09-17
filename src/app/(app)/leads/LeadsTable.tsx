@@ -8,6 +8,7 @@ import type { Lead } from '@/types/database'
 
 const SOURCE_LABELS: Record<string, string> = {
   META_ADS: 'Meta Ads', MANUAL: 'Manual', XLSX_IMPORT: 'XLSX',
+  COLD_OUTREACH: 'Cold Outreach',
   TIKTOK: 'TikTok', SNAPCHAT: 'Snapchat', WHATSAPP: 'WhatsApp',
 }
 

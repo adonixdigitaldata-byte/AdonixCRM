@@ -103,7 +103,7 @@ create table if not exists import_batches (
 -- ============================================================
 create table if not exists leads (
   id uuid primary key default gen_random_uuid(),
-  source text not null check (source in ('META_ADS','TIKTOK','SNAPCHAT','WHATSAPP','MANUAL','XLSX_IMPORT')),
+  source text not null check (source in ('META_ADS','TIKTOK','SNAPCHAT','WHATSAPP','MANUAL','XLSX_IMPORT','COLD_OUTREACH')),
 
   -- Ad attribution (nullable — only for META_ADS)
   campaign_id uuid references ad_campaigns(id),

@@ -20,7 +20,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
-import { Phone, Globe, FileUp, MessageCircle, GripVertical } from 'lucide-react'
+import { Phone, Globe, FileUp, MessageCircle, GripVertical, Send } from 'lucide-react'
 import type { Lead, LeadStage } from '@/types/database'
 
 interface Props {
@@ -34,6 +34,7 @@ interface Props {
 const SOURCE_ICONS: Record<string, React.ReactNode> = {
   META_ADS: <Globe size={11} />,
   MANUAL: <Phone size={11} />,
+  COLD_OUTREACH: <Send size={11} />,
   XLSX_IMPORT: <FileUp size={11} />,
   WHATSAPP: <MessageCircle size={11} />,
 }

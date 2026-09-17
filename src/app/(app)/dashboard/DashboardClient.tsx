@@ -48,6 +48,7 @@ interface Props {
 const SOURCE_LABELS: Record<string, string> = {
   META_ADS: 'Meta Ads',
   MANUAL: 'Manual',
+  COLD_OUTREACH: 'Cold Outreach',
   XLSX_IMPORT: 'XLSX Import',
   TIKTOK: 'TikTok',
   SNAPCHAT: 'Snapchat',

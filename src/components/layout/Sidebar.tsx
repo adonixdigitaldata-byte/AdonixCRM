@@ -63,6 +63,7 @@ const accountManagerNav = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/leads', label: 'Leads', icon: Users },
+      { href: '/settings/import', label: 'Import leads', icon: Upload },
       { href: '/tasks', label: 'Tasks & Operations', icon: CheckSquare },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
     ],
@@ -84,6 +85,7 @@ const agentNav = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/leads', label: 'My leads', icon: Users },
+      { href: '/settings/import', label: 'Import leads', icon: Upload },
       { href: '/tasks', label: 'Tasks & Operations', icon: CheckSquare },
       { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
     ],

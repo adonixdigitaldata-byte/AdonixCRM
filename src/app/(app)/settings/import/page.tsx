@@ -10,6 +10,11 @@ export default async function ImportPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase
+    .from('profiles').select('id, role').eq('id', user.id).single()
+
+  if (profile?.role === 'CLIENT') redirect('/portal')
+
   const [
     { data: stages },
     { data: agents },
@@ -33,6 +38,7 @@ export default async function ImportPage() {
       agents={formattedAgents}
       batches={batches ?? []}
       currentUserId={user.id}
+      userRole={profile?.role}
     />
   )
 }

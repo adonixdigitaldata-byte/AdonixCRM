@@ -50,6 +50,11 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (insertError) {
+    if (insertError.message?.includes('leads_source_check')) {
+      return NextResponse.json({
+        error: 'Database constraint requires update for this source. Please run the SQL migration in Supabase SQL Editor: ALTER TABLE leads DROP CONSTRAINT leads_source_check; ALTER TABLE leads ADD CONSTRAINT leads_source_check CHECK (source IN (\'META_ADS\',\'TIKTOK\',\'SNAPCHAT\',\'WHATSAPP\',\'MANUAL\',\'XLSX_IMPORT\',\'COLD_OUTREACH\'));'
+      }, { status: 400 })
+    }
     return NextResponse.json({ error: insertError.message }, { status: 400 })
   }
 

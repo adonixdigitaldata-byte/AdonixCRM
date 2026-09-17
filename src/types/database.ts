@@ -14,7 +14,7 @@ export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'COMPLETED
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 export type TaskUpdateType = 'PROGRESS_NOTE' | 'STATUS_CHANGE' | 'LINK_ADDED' | 'BLOCKER'
 
-export type LeadSource = 'META_ADS' | 'TIKTOK' | 'SNAPCHAT' | 'WHATSAPP' | 'MANUAL' | 'XLSX_IMPORT'
+export type LeadSource = 'META_ADS' | 'TIKTOK' | 'SNAPCHAT' | 'WHATSAPP' | 'MANUAL' | 'XLSX_IMPORT' | 'COLD_OUTREACH'
 export type QuotationStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'
 export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'CANCELLED'
 export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CHEQUE' | 'UPI' | 'WIRE' | 'OTHER'

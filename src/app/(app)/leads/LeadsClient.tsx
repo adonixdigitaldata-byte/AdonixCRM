@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, LayoutGrid, List, Search, X, Filter, SlidersHorizontal, Calendar } from 'lucide-react'
+import { Plus, LayoutGrid, List, Search, X, Filter, SlidersHorizontal, Calendar, Upload } from 'lucide-react'
 import KanbanBoard from './KanbanBoard'
 import LeadsTable from './LeadsTable'
 import AddLeadModal from './AddLeadModal'
@@ -210,13 +211,23 @@ export default function LeadsClient({
             </button>
           </div>
 
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowAddModal(true)}
-          >
-            <Plus size={14} />
-            Add lead
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/settings/import"
+              className="btn btn-secondary btn-sm"
+              title="Import leads from Excel / XLSX file"
+            >
+              <Upload size={14} />
+              Import XLSX
+            </Link>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowAddModal(true)}
+            >
+              <Plus size={14} />
+              Add lead
+            </button>
+          </div>
         </div>
       </div>
 
@@ -352,6 +363,7 @@ export default function LeadsClient({
           <option value="">All sources</option>
           <option value="META_ADS">Meta Ads</option>
           <option value="MANUAL">Manual</option>
+          <option value="COLD_OUTREACH">Cold Outreach</option>
           <option value="XLSX_IMPORT">XLSX Import</option>
           <option value="WHATSAPP">WhatsApp</option>
           <option value="TIKTOK">TikTok</option>

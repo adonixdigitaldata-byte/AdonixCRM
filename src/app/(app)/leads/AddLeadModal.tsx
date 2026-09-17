@@ -16,6 +16,8 @@ interface Props {
 
 const SOURCES = [
   { value: 'MANUAL', label: 'Manual entry' },
+  { value: 'COLD_OUTREACH', label: 'Cold outreach' },
+  { value: 'META_ADS', label: 'Meta Ads' },
   { value: 'WHATSAPP', label: 'WhatsApp' },
   { value: 'TIKTOK', label: 'TikTok' },
   { value: 'SNAPCHAT', label: 'Snapchat' },

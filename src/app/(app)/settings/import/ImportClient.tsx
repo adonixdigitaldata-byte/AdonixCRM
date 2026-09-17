@@ -11,6 +11,7 @@ interface Props {
   agents: { id: string; name: string }[]
   batches: any[]
   currentUserId: string
+  userRole?: string
 }
 
 interface ParsedRow {
@@ -27,13 +28,14 @@ interface ParsedRow {
   error?: string
 }
 
-export default function ImportClient({ stages, agents, batches: initialBatches, currentUserId }: Props) {
+export default function ImportClient({ stages, agents, batches: initialBatches, currentUserId, userRole }: Props) {
+  const isAgent = userRole === 'AGENT'
   const [batches, setBatches] = useState(initialBatches)
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [fileName, setFileName] = useState('')
   const [stageId, setStageId] = useState(stages[0]?.id ?? '')
-  const [agentId, setAgentId] = useState('')
+  const [agentId, setAgentId] = useState(isAgent ? currentUserId : '')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<any>(null)
 
@@ -159,54 +161,48 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
     setImporting(true)
     const validRows = parsedRows.filter((r) => r.status === 'valid')
 
-    // Create batch record
-    const { data: batch } = await supabase.from('import_batches').insert({
-      file_name: fileName,
-      uploaded_by: currentUserId,
-      total_rows: parsedRows.length,
-      success_count: 0,
-      error_count: 0,
-      duplicate_count: parsedRows.filter((r) => r.status === 'duplicate').length,
-    }).select('id').single()
-
-    let successCount = 0
-    let errorCount = 0
-
-    // Insert leads in batches
-    for (const row of validRows) {
-      const { error } = await supabase.from('leads').insert({
-        source: 'XLSX_IMPORT',
-        name: row.name || null,
-        phone: row.phone || null,
-        email: row.email || null,
-        city: row.city || null,
-        interest: row.interest || null,
-        potential_value: row.potential_value || null,
-        form_data: {},
-        stage_id: row.stage_id || stageId,
-        assigned_agent_id: row.assigned_agent_id !== undefined ? (row.assigned_agent_id || null) : (agentId || null),
-        import_batch_id: batch?.id,
+    try {
+      const res = await fetch('/api/leads/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName,
+          defaultStageId: stageId,
+          defaultAgentId: isAgent ? currentUserId : agentId,
+          rows: validRows.map((r) => ({
+            name: r.name,
+            phone: r.phone,
+            email: r.email,
+            city: r.city,
+            interest: r.interest,
+            potential_value: r.potential_value,
+            stage_id: r.stage_id || stageId,
+            assigned_agent_id: isAgent ? currentUserId : (r.assigned_agent_id !== undefined ? r.assigned_agent_id : agentId),
+          })),
+        }),
       })
-      if (error) errorCount++
-      else successCount++
+
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Failed to import leads')
+        setImporting(false)
+        return
+      }
+
+      setImportResult({
+        total: validRows.length,
+        success: data.successCount ?? 0,
+        errors: data.errorCount ?? 0,
+        duplicates: parsedRows.filter((r) => r.status === 'duplicate').length,
+      })
+      setStep('done')
+      const { data: updatedBatches } = await supabase.from('import_batches').select('*').order('created_at', { ascending: false }).limit(10)
+      if (updatedBatches) setBatches(updatedBatches)
+    } catch (err: any) {
+      alert(err.message || 'Error occurred during import')
+    } finally {
+      setImporting(false)
     }
-
-    // Update batch
-    await supabase.from('import_batches').update({
-      success_count: successCount,
-      error_count: errorCount,
-    }).eq('id', batch?.id)
-
-    setImportResult({
-      total: validRows.length,
-      success: successCount,
-      errors: errorCount,
-      duplicates: parsedRows.filter((r) => r.status === 'duplicate').length,
-    })
-    setStep('done')
-    setImporting(false)
-    const { data: updatedBatches } = await supabase.from('import_batches').select('*').order('created_at', { ascending: false }).limit(10)
-    if (updatedBatches) setBatches(updatedBatches)
   }
 
   const validCount = parsedRows.filter((r) => r.status === 'valid').length
@@ -319,10 +315,25 @@ export default function ImportClient({ stages, agents, batches: initialBatches, 
                     </div>
                     <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Assign to agent</label>
-                      <select className="form-input" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-                        <option value="">Unassigned</option>
-                        {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
+                      {isAgent ? (
+                        <div
+                          className="form-input"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            background: 'var(--surface-hover)',
+                            color: 'var(--text-primary)',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {agents.find((a) => a.id === currentUserId)?.name || 'Assigned to you (Sales Agent)'}
+                        </div>
+                      ) : (
+                        <select className="form-input" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+                          <option value="">Unassigned</option>
+                          {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      )}
                     </div>
                   </div>
 
