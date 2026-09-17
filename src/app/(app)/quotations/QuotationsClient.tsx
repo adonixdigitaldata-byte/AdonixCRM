@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { Plus, Search, Filter } from 'lucide-react'
+import { Plus, Search, Filter, Calendar, X } from 'lucide-react'
+import { isDateInFilterRange, extractAvailableMonths } from '@/lib/utils/date-filter'
 
 interface Props {
   quotations: any[]
@@ -29,6 +30,14 @@ export default function QuotationsClient({ quotations }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [dateFilter, setDateFilter] = useState('ALL')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+
+  // Extract available months from quotations
+  const availableMonths = useMemo(() => {
+    return extractAvailableMonths(quotations, (q) => q.issue_date || q.created_at)
+  }, [quotations])
 
   // Helper to determine if a quotation is expired
   function getIsQuotationExpired(q: any): boolean {
@@ -46,7 +55,7 @@ export default function QuotationsClient({ quotations }: Props) {
     return false
   }
 
-  // Search & Status filtering
+  // Search, Status & Date filtering
   const filtered = quotations.filter((q) => {
     const qNum = (q.quote_number ?? '').toLowerCase()
     const cName = (q.client?.name ?? '').toLowerCase()
@@ -57,8 +66,14 @@ export default function QuotationsClient({ quotations }: Props) {
     const isExpired = getIsQuotationExpired(q)
     const effectiveStatus = isExpired ? 'EXPIRED' : q.status
     const matchesStatus = statusFilter === 'ALL' || effectiveStatus === statusFilter
+    const matchesDate = isDateInFilterRange(
+      q.issue_date || q.created_at,
+      dateFilter,
+      customStartDate,
+      customEndDate
+    )
 
-    return matchesSearch && matchesStatus
+    return matchesSearch && matchesStatus && matchesDate
   })
 
   const totalQuoted = filtered.reduce((acc, q) => acc + convertToSAR(Number(q.total), q.currency), 0)
@@ -68,6 +83,16 @@ export default function QuotationsClient({ quotations }: Props) {
     .reduce((acc, q) => acc + convertToSAR(Number(q.total), q.currency), 0)
   const acceptedCount = filtered.filter((q) => q.status === 'ACCEPTED').length
 
+  const hasActiveFilters = search || statusFilter !== 'ALL' || dateFilter !== 'ALL' || customStartDate || customEndDate
+
+  function clearAllFilters() {
+    setSearch('')
+    setStatusFilter('ALL')
+    setDateFilter('ALL')
+    setCustomStartDate('')
+    setCustomEndDate('')
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -75,6 +100,7 @@ export default function QuotationsClient({ quotations }: Props) {
           <h1 className="text-page-title">Quotations & Proposals</h1>
           <p className="text-meta" style={{ marginTop: 2 }}>
             {filtered.length} of {quotations.length} quotation{quotations.length !== 1 ? 's' : ''}
+            {hasActiveFilters ? ' (filtered)' : ''}
           </p>
         </div>
         <Link href="/quotations/create" className="btn btn-primary btn-sm">
@@ -127,15 +153,100 @@ export default function QuotationsClient({ quotations }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               style={{ paddingLeft: 36 }}
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
 
+          {/* Date Filter */}
+          <div className="flex items-center gap-2">
+            <Calendar size={14} style={{ color: 'var(--text-secondary)' }} />
+            <select
+              className="form-select"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value)
+                if (e.target.value !== 'CUSTOM') {
+                  setCustomStartDate('')
+                  setCustomEndDate('')
+                }
+              }}
+              style={
+                dateFilter !== 'ALL'
+                  ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600, width: 140 }
+                  : { width: 140 }
+              }
+              title="Filter quotations by date"
+            >
+              <option value="ALL">All Time</option>
+              <option value="TODAY">Today</option>
+              <option value="PAST_3_DAYS">Past 3 Days</option>
+              <option value="THIS_WEEK">This Week</option>
+              <option value="THIS_MONTH">This Month</option>
+              {availableMonths.length > 0 && (
+                <optgroup label="By Month">
+                  {availableMonths.map((m) => (
+                    <option key={m.value} value={`month:${m.value}`}>
+                      {m.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <option value="CUSTOM">Custom Range...</option>
+            </select>
+          </div>
+
+          {/* Custom Date Pickers */}
+          {dateFilter === 'CUSTOM' && (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '4px 8px', fontSize: 13, height: 36 }}
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                title="Start date"
+              />
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>to</span>
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '4px 8px', fontSize: 13, height: 36 }}
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                title="End date"
+              />
+            </div>
+          )}
+
+          {/* Status Filter */}
           <div className="flex items-center gap-2">
             <Filter size={14} style={{ color: 'var(--text-secondary)' }} />
             <select
               className="form-select"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ width: 140 }}
+              style={
+                statusFilter !== 'ALL'
+                  ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600, width: 140 }
+                  : { width: 140 }
+              }
             >
               <option value="ALL">All Statuses</option>
               <option value="DRAFT">Draft</option>
@@ -145,6 +256,18 @@ export default function QuotationsClient({ quotations }: Props) {
               <option value="EXPIRED">Expired</option>
             </select>
           </div>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={clearAllFilters}
+              style={{ color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <X size={13} />
+              Clear filters
+            </button>
+          )}
         </div>
 
         {filtered.length === 0 ? (

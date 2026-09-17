@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { Search, Filter, Plus } from 'lucide-react'
+import { Search, Filter, Plus, Calendar, X } from 'lucide-react'
+import { isDateInFilterRange, extractAvailableMonths } from '@/lib/utils/date-filter'
 
 interface Props {
   invoices: any[]
@@ -29,6 +30,14 @@ export default function InvoicesClient({ invoices }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [dateFilter, setDateFilter] = useState('ALL')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+
+  // Extract available months from invoices
+  const availableMonths = useMemo(() => {
+    return extractAvailableMonths(invoices, (inv) => inv.issue_date || inv.created_at)
+  }, [invoices])
 
   // Helper to determine if an invoice is overdue
   function getIsOverdue(inv: any) {
@@ -59,8 +68,14 @@ export default function InvoicesClient({ invoices }: Props) {
       statusFilter === 'ALL' ||
       (statusFilter === 'OVERDUE' && isOverdue) ||
       (statusFilter !== 'OVERDUE' && inv.status === statusFilter)
+    const matchesDate = isDateInFilterRange(
+      inv.issue_date || inv.created_at,
+      dateFilter,
+      customStartDate,
+      customEndDate
+    )
 
-    return matchesSearch && matchesStatus
+    return matchesSearch && matchesStatus && matchesDate
   })
 
   // Exclude CANCELLED invoices from total invoiced and outstanding calculations
@@ -71,13 +86,24 @@ export default function InvoicesClient({ invoices }: Props) {
   const totalOutstanding = totalInvoiced - totalCollected
   const overdueCount = activeInvoices.filter(getIsOverdue).length
 
+  const hasActiveFilters = search || statusFilter !== 'ALL' || dateFilter !== 'ALL' || customStartDate || customEndDate
+
+  function clearAllFilters() {
+    setSearch('')
+    setStatusFilter('ALL')
+    setDateFilter('ALL')
+    setCustomStartDate('')
+    setCustomEndDate('')
+  }
+
   return (
     <div>
       <div className="page-header">
         <div>
           <h1 className="text-page-title">Invoices & Receivables</h1>
           <p className="text-meta" style={{ marginTop: 2 }}>
-            {filtered.length} of {invoices.length} invoice{invoices.length !== 1 ? 's' : ''} · Track billing, partial payments & collections
+            {filtered.length} of {invoices.length} invoice{invoices.length !== 1 ? 's' : ''}
+            {hasActiveFilters ? ' (filtered)' : ''} · Track billing, partial payments & collections
           </p>
         </div>
         <Link href="/invoices/new" className="btn btn-primary btn-sm">
@@ -86,11 +112,9 @@ export default function InvoicesClient({ invoices }: Props) {
         </Link>
       </div>
 
-
       <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Financial Analytics Bar */}
         <div className="rg-stats">
-
           <div className="card" style={{ padding: '14px 16px' }}>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Total Invoiced</span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: 'var(--text-primary)' }}>
@@ -136,15 +160,100 @@ export default function InvoicesClient({ invoices }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               style={{ paddingLeft: 36 }}
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
 
+          {/* Date Filter */}
+          <div className="flex items-center gap-2">
+            <Calendar size={14} style={{ color: 'var(--text-secondary)' }} />
+            <select
+              className="form-select"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value)
+                if (e.target.value !== 'CUSTOM') {
+                  setCustomStartDate('')
+                  setCustomEndDate('')
+                }
+              }}
+              style={
+                dateFilter !== 'ALL'
+                  ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600, width: 140 }
+                  : { width: 140 }
+              }
+              title="Filter invoices by date"
+            >
+              <option value="ALL">All Time</option>
+              <option value="TODAY">Today</option>
+              <option value="PAST_3_DAYS">Past 3 Days</option>
+              <option value="THIS_WEEK">This Week</option>
+              <option value="THIS_MONTH">This Month</option>
+              {availableMonths.length > 0 && (
+                <optgroup label="By Month">
+                  {availableMonths.map((m) => (
+                    <option key={m.value} value={`month:${m.value}`}>
+                      {m.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <option value="CUSTOM">Custom Range...</option>
+            </select>
+          </div>
+
+          {/* Custom Date Pickers */}
+          {dateFilter === 'CUSTOM' && (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '4px 8px', fontSize: 13, height: 36 }}
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                title="Start date"
+              />
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>to</span>
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '4px 8px', fontSize: 13, height: 36 }}
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                title="End date"
+              />
+            </div>
+          )}
+
+          {/* Status Filter */}
           <div className="flex items-center gap-2">
             <Filter size={14} style={{ color: 'var(--text-secondary)' }} />
             <select
               className="form-select"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ width: 150 }}
+              style={
+                statusFilter !== 'ALL'
+                  ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600, width: 150 }
+                  : { width: 150 }
+              }
             >
               <option value="ALL">All Statuses</option>
               <option value="DRAFT">Draft</option>
@@ -155,6 +264,18 @@ export default function InvoicesClient({ invoices }: Props) {
               <option value="CANCELLED">Cancelled</option>
             </select>
           </div>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={clearAllFilters}
+              style={{ color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <X size={13} />
+              Clear filters
+            </button>
+          )}
         </div>
 
         {filtered.length === 0 ? (

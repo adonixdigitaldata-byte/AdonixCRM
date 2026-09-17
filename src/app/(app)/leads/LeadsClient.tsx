@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, LayoutGrid, List, Search, X, Filter, SlidersHorizontal } from 'lucide-react'
+import { Plus, LayoutGrid, List, Search, X, Filter, SlidersHorizontal, Calendar } from 'lucide-react'
 import KanbanBoard from './KanbanBoard'
 import LeadsTable from './LeadsTable'
 import AddLeadModal from './AddLeadModal'
+import { getDateFilterBounds } from '@/lib/utils/date-filter'
 import type { Lead, LeadStage, Profile, AdCampaign } from '@/types/database'
 
 interface Props {
@@ -37,7 +38,12 @@ export default function LeadsClient({
 
   // Filters
   const [search, setSearch] = useState('')
-  const [filterMonth, setFilterMonth] = useState(initialSearchParams.month || '')
+  const initialDate = initialSearchParams.month
+    ? (initialSearchParams.month.startsWith('month:') ? initialSearchParams.month : `month:${initialSearchParams.month}`)
+    : 'ALL'
+  const [filterDate, setFilterDate] = useState(initialDate)
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
   const [filterCampaign, setFilterCampaign] = useState(initialSearchParams.campaign_id || '')
   const [filterAdSet, setFilterAdSet] = useState('')
   const [filterAd, setFilterAd] = useState('')
@@ -64,17 +70,10 @@ export default function LeadsClient({
       `)
       .order('created_at', { ascending: false })
 
-    if (filterMonth) {
-      const [yearStr, monthStr] = filterMonth.split('-')
-      const year = parseInt(yearStr, 10)
-      const month = parseInt(monthStr, 10)
-      if (!isNaN(year) && !isNaN(month)) {
-        // Start of month (inclusive) and start of next month (exclusive) in user's local timezone
-        const startOfMonth = new Date(year, month - 1, 1, 0, 0, 0, 0).toISOString()
-        const startOfNextMonth = new Date(year, month, 1, 0, 0, 0, 0).toISOString()
-        query = query.gte('created_at', startOfMonth).lt('created_at', startOfNextMonth)
-      }
-    }
+    const { start, end } = getDateFilterBounds(filterDate, customStartDate, customEndDate)
+    if (start) query = query.gte('created_at', start)
+    if (end) query = query.lte('created_at', end)
+
     if (filterCampaign) query = query.eq('campaign_id', filterCampaign)
     if (filterAdSet) query = query.eq('ad_set_id', filterAdSet)
     if (filterAd) query = query.eq('ad_id', filterAd)
@@ -93,7 +92,7 @@ export default function LeadsClient({
     const { data } = await query
     setLeads((data as Lead[]) ?? [])
     setLoading(false)
-  }, [filterMonth, filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage, search, profile])
+  }, [filterDate, customStartDate, customEndDate, filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage, search, profile])
 
   useEffect(() => {
     fetchLeads()
@@ -130,7 +129,8 @@ export default function LeadsClient({
   }, [filterAdSet])
 
   const activeFilterCount = [
-    filterMonth, filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage
+    filterDate !== 'ALL' ? filterDate : '',
+    filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage
   ].filter(Boolean).length
 
   const refreshAvailableMonths = useCallback(async () => {
@@ -166,7 +166,9 @@ export default function LeadsClient({
   }, [profile.id, profile.role, supabase])
 
   function clearAllFilters() {
-    setFilterMonth('')
+    setFilterDate('ALL')
+    setCustomStartDate('')
+    setCustomEndDate('')
     setFilterCampaign('')
     setFilterAdSet('')
     setFilterAd('')
@@ -248,26 +250,61 @@ export default function LeadsClient({
           )}
         </div>
 
-        {/* Month - Only shown when leads exist */}
-        {availableMonths.length > 0 && (
-          <select
-            className="filter-select"
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            style={
-              filterMonth
-                ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600 }
-                : undefined
+        {/* Date Filter */}
+        <select
+          className="filter-select"
+          value={filterDate}
+          onChange={(e) => {
+            setFilterDate(e.target.value)
+            if (e.target.value !== 'CUSTOM') {
+              setCustomStartDate('')
+              setCustomEndDate('')
             }
-            title="Filter leads month-wise"
-          >
-            <option value="">All months</option>
-            {availableMonths.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          }}
+          style={
+            filterDate !== 'ALL'
+              ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600 }
+              : undefined
+          }
+          title="Filter leads by date"
+        >
+          <option value="ALL">All Time</option>
+          <option value="TODAY">Today</option>
+          <option value="PAST_3_DAYS">Past 3 Days</option>
+          <option value="THIS_WEEK">This Week</option>
+          <option value="THIS_MONTH">This Month</option>
+          {availableMonths.length > 0 && (
+            <optgroup label="By Month">
+              {availableMonths.map((m) => (
+                <option key={m.value} value={`month:${m.value}`}>
+                  {m.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <option value="CUSTOM">Custom Range...</option>
+        </select>
+
+        {filterDate === 'CUSTOM' && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              className="filter-select"
+              style={{ padding: '4px 8px' }}
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              title="Start date"
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>to</span>
+            <input
+              type="date"
+              className="filter-select"
+              style={{ padding: '4px 8px' }}
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              title="End date"
+            />
+          </div>
         )}
 
         {/* Campaign cascade */}
