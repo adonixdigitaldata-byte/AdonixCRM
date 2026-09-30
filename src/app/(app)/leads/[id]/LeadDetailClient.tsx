@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import type { Lead, LeadStage, Profile, LeadNote, LeadFollowup, LeadActivity } from '@/types/database'
 import Link from 'next/link'
+import StageChangeModal, { type StageChangePayload } from '@/components/leads/StageChangeModal'
+import FollowupCompletionModal, { type FollowupCompletionData } from '@/components/leads/FollowupCompletionModal'
 
 interface Props {
   lead: Lead
@@ -104,9 +106,13 @@ export default function LeadDetailClient({
   const [editFuLoading, setEditFuLoading] = useState(false)
 
   // Follow-up completion modal state
-  const [completingFollowupId, setCompletingFollowupId] = useState<string | null>(null)
-  const [outcomeNote, setOutcomeNote] = useState('')
-  const [completeLoading, setCompleteLoading] = useState(false)
+  const [selectedFollowupToComplete, setSelectedFollowupToComplete] = useState<LeadFollowup | null>(null)
+
+  // Pending stage change interception modal state
+  const [pendingStageChange, setPendingStageChange] = useState<{
+    fromStage: LeadStage | null
+    toStage: LeadStage
+  } | null>(null)
 
   // Delete Lead modal state
   const [showDeleteLeadModal, setShowDeleteLeadModal] = useState(false)
@@ -176,6 +182,36 @@ export default function LeadDetailClient({
 
   async function handleStageChange(newStageId: string) {
     if (newStageId === lead.stage_id || stageLoading) return
+
+    const oldStage = stages.find((s) => s.id === lead.stage_id) || null
+    const newStage = stages.find((s) => s.id === newStageId)
+    if (!newStage) return
+
+    // Active & Closed stages require mandatory interception modal
+    const stagesRequiringIntercept = [
+      'contacted',
+      'qualified',
+      'no_reply',
+      'followup',
+      'proposal',
+      'negotiation',
+      'won',
+      'lost',
+      'junk_leads',
+    ]
+
+    if (stagesRequiringIntercept.includes(newStage.key)) {
+      setPendingStageChange({
+        fromStage: oldStage,
+        toStage: newStage,
+      })
+      return
+    }
+
+    await executeDirectStageChange(newStageId, oldStage, newStage)
+  }
+
+  async function executeDirectStageChange(newStageId: string, fromStage: LeadStage | null, toStage: LeadStage) {
     setStageLoading(true)
     const oldStageId = lead.stage_id
 
@@ -184,8 +220,6 @@ export default function LeadDetailClient({
       lead_id: lead.id, from_stage_id: oldStageId, to_stage_id: newStageId, changed_by: profile.id,
     })
 
-    const toStage = stages.find((s) => s.id === newStageId)
-    const fromStage = stages.find((s) => s.id === oldStageId)
     const { data: newActivity } = await supabase.from('lead_activities').insert({
       lead_id: lead.id, activity_type: 'STAGE_CHANGE', performed_by: profile.id,
       metadata: { from_stage: fromStage?.label, to_stage: toStage?.label },
@@ -193,6 +227,119 @@ export default function LeadDetailClient({
 
     setLead({ ...lead, stage_id: newStageId, stage: toStage })
     if (newActivity) setActivities([newActivity as any, ...activities])
+    setStageLoading(false)
+  }
+
+  async function handleConfirmStageChange(payload: StageChangePayload) {
+    if (!pendingStageChange) return
+
+    const { fromStage, toStage } = pendingStageChange
+    const effectiveStageId = payload.targetStageId
+    const effectiveStage = stages.find((s) => s.id === effectiveStageId) || toStage
+
+    setPendingStageChange(null)
+    setStageLoading(true)
+
+    const updates: any[] = [
+      supabase.from('leads').update({ stage_id: effectiveStageId, updated_at: new Date().toISOString() }).eq('id', lead.id),
+      supabase.from('lead_stage_history').insert({
+        lead_id: lead.id,
+        from_stage_id: fromStage?.id || lead.stage_id,
+        to_stage_id: effectiveStageId,
+        changed_by: profile.id,
+      }),
+      supabase.from('lead_activities').insert({
+        lead_id: lead.id,
+        activity_type: 'STAGE_CHANGE',
+        performed_by: profile.id,
+        metadata: {
+          from_stage: fromStage?.label || '—',
+          to_stage: effectiveStage.label || '—',
+          outcome: payload.outcome || null,
+          lost_reason: payload.lostReason || null,
+        },
+      }),
+    ]
+
+    // Save note if provided or if marking lost
+    let noteBodyToInsert: string | null = null
+    if (payload.note && payload.note.trim()) {
+      noteBodyToInsert = payload.note.trim()
+    } else if (payload.lostReason) {
+      noteBodyToInsert = `Marked as ${effectiveStage.label}. Reason: ${payload.lostReason}`
+    }
+
+    if (noteBodyToInsert) {
+      const optimisticNote: LeadNote = {
+        id: crypto.randomUUID(),
+        lead_id: lead.id,
+        author_id: profile.id,
+        author: profile,
+        body: noteBodyToInsert,
+        created_at: new Date().toISOString(),
+      }
+      setNotes((prev) => [optimisticNote, ...prev])
+      updates.push(
+        supabase.from('lead_notes').insert({
+          lead_id: lead.id,
+          author_id: profile.id,
+          body: noteBodyToInsert,
+        })
+      )
+    }
+
+    // Schedule mandatory follow-up if date provided
+    if (payload.followupDate) {
+      const followupText = payload.followupNote?.trim() || (payload.outcome ? `Follow-up after ${payload.outcome}` : 'Scheduled follow-up')
+      const optimisticFollowup: LeadFollowup = {
+        id: crypto.randomUUID(),
+        lead_id: lead.id,
+        agent_id: lead.assigned_agent_id || profile.id,
+        agent: profile,
+        scheduled_at: payload.followupDate,
+        note: followupText,
+        is_completed: false,
+        created_at: new Date().toISOString(),
+        outcome_note: null,
+        completed_at: null,
+      }
+      setFollowups((prev) => [optimisticFollowup, ...prev])
+
+      updates.push(
+        supabase.from('lead_followups').insert({
+          lead_id: lead.id,
+          agent_id: lead.assigned_agent_id || profile.id,
+          scheduled_at: payload.followupDate,
+          note: followupText,
+          is_completed: false,
+        })
+      )
+      updates.push(
+        supabase.from('lead_activities').insert({
+          lead_id: lead.id,
+          activity_type: 'FOLLOWUP_SCHEDULED',
+          performed_by: profile.id,
+          metadata: { date: payload.followupDate, note: followupText },
+        })
+      )
+    }
+
+    // Closed stages auto-resolve all open follow-ups
+    if (['won', 'lost', 'junk_leads'].includes(effectiveStage.key)) {
+      setFollowups((prev) =>
+        prev.map((f) => (!f.is_completed ? { ...f, is_completed: true, completed_at: new Date().toISOString() } : f))
+      )
+      updates.push(
+        supabase
+          .from('lead_followups')
+          .update({ is_completed: true, completed_at: new Date().toISOString() })
+          .eq('lead_id', lead.id)
+          .eq('is_completed', false)
+      )
+    }
+
+    setLead((prev) => ({ ...prev, stage_id: effectiveStageId, stage: effectiveStage }))
+    await Promise.all(updates)
     setStageLoading(false)
   }
 
@@ -308,36 +455,98 @@ export default function LeadDetailClient({
 
   // Open completion outcome modal
   function openCompleteModal(fuId: string) {
-    setCompletingFollowupId(fuId)
-    setOutcomeNote('')
+    const fu = followups.find((f) => f.id === fuId)
+    if (fu) setSelectedFollowupToComplete(fu)
   }
 
-  async function submitCompleteFollowup(e: React.FormEvent) {
-    e.preventDefault()
-    if (!completingFollowupId || completeLoading) return
-    setCompleteLoading(true)
+  async function handleFollowupCompletionSubmit(data: FollowupCompletionData) {
+    setSelectedFollowupToComplete(null)
+    const fuId = data.followupId
 
+    // Mark current followup complete
     await supabase.from('lead_followups').update({
       is_completed: true,
       completed_at: new Date().toISOString(),
-      outcome_note: outcomeNote.trim() || null,
-    }).eq('id', completingFollowupId)
+      outcome_note: data.outcomeNote || null,
+    }).eq('id', fuId)
 
-    const { data: act } = await supabase.from('lead_activities').insert({
-      lead_id: lead.id, activity_type: 'FOLLOWUP_COMPLETED', performed_by: profile.id,
-      metadata: { outcome: outcomeNote.trim() || null },
-    }).select('*, performer:profiles(id, name)').single()
+    await supabase.from('lead_activities').insert({
+      lead_id: lead.id,
+      activity_type: 'FOLLOWUP_COMPLETED',
+      performed_by: profile.id,
+      metadata: { outcome: data.outcomeNote || null },
+    })
 
-    setFollowups(followups.map((f) =>
-      f.id === completingFollowupId
-        ? { ...f, is_completed: true, completed_at: new Date().toISOString(), outcome_note: outcomeNote.trim() || null }
-        : f
-    ))
-    if (act) setActivities([act as any, ...activities])
+    setFollowups((prev) =>
+      prev.map((f) =>
+        f.id === fuId
+          ? { ...f, is_completed: true, completed_at: new Date().toISOString(), outcome_note: data.outcomeNote || null }
+          : f
+      )
+    )
 
-    setCompletingFollowupId(null)
-    setOutcomeNote('')
-    setCompleteLoading(false)
+    // 1. If targetStageId changed, execute stage transition
+    const targetStage = stages.find((s) => s.id === data.targetStageId)
+    if (targetStage && targetStage.id !== lead.stage_id) {
+      await supabase.from('leads').update({ stage_id: targetStage.id }).eq('id', lead.id)
+      await supabase.from('lead_activities').insert({
+        lead_id: lead.id,
+        activity_type: 'STAGE_CHANGE',
+        performed_by: profile.id,
+        metadata: {
+          from_stage: lead.stage?.label,
+          to_stage: targetStage.label,
+          outcome: data.outcomeNote || null,
+        },
+      })
+      setLead((prev) => ({ ...prev, stage_id: targetStage.id, stage: targetStage }))
+
+      // If closed stage, resolve any remaining open follow-ups
+      if (['won', 'lost', 'junk_leads'].includes(targetStage.key)) {
+        await supabase
+          .from('lead_followups')
+          .update({ is_completed: true, completed_at: new Date().toISOString() })
+          .eq('lead_id', lead.id)
+          .eq('is_completed', false)
+
+        setFollowups((prev) =>
+          prev.map((f) => (!f.is_completed ? { ...f, is_completed: true, completed_at: new Date().toISOString() } : f))
+        )
+      }
+    }
+
+    // 2. If lost reason provided, insert into notes
+    if (data.lostReason) {
+      const lostNoteText = `[Marked as Lost] Reason: ${data.lostReason}${data.outcomeNote ? ` — ${data.outcomeNote}` : ''}`
+      const { data: note } = await supabase.from('lead_notes').insert({
+        lead_id: lead.id,
+        author_id: profile.id,
+        body: lostNoteText,
+      }).select('*, author:profiles(id, name)').single()
+
+      if (note) setNotes((prev) => [note as any, ...prev])
+    }
+
+    // 3. Handle next follow-up if scheduled
+    if (data.nextStepType === 'FOLLOWUP' && data.nextFollowupDate) {
+      const followupText = data.nextFollowupNote || 'Next follow-up'
+      const { data: newFu } = await supabase.from('lead_followups').insert({
+        lead_id: lead.id,
+        agent_id: lead.assigned_agent_id || profile.id,
+        scheduled_at: data.nextFollowupDate,
+        note: followupText,
+        is_completed: false,
+      }).select('*, agent:profiles(name)').single()
+
+      await supabase.from('lead_activities').insert({
+        lead_id: lead.id,
+        activity_type: 'FOLLOWUP_SCHEDULED',
+        performed_by: profile.id,
+        metadata: { date: data.nextFollowupDate, note: followupText },
+      })
+
+      if (newFu) setFollowups((prev) => [newFu as any, ...prev])
+    }
   }
 
   const formDataEntries = Object.entries(lead.form_data ?? {}).filter(
@@ -417,6 +626,44 @@ export default function LeadDetailClient({
         {/* LEFT COLUMN: Main Activity Hub & Dynamic Content */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           
+          {/* Idle Lead Warning Banner */}
+          {!['won', 'lost', 'junk_leads'].includes(lead.stage?.key || '') && !followups.some((f) => !f.is_completed) && (
+            <div
+              style={{
+                padding: '12px 16px',
+                backgroundColor: '#FEF2F2',
+                border: '1px solid #FECACA',
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <AlertCircle size={20} color="#DC2626" style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#991B1B' }}>
+                    No Next Action Scheduled (Idle Lead)
+                  </div>
+                  <div style={{ fontSize: 12, color: '#B91C1C', marginTop: 1 }}>
+                    This active lead has no pending follow-up. Schedule a next action so it stays engaged and does not stagnate.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFollowupForm(true)}
+                className="btn btn-primary btn-sm"
+                style={{ backgroundColor: '#DC2626', borderColor: '#DC2626', flexShrink: 0 }}
+              >
+                <Clock size={13} style={{ marginRight: 4 }} />
+                Schedule Follow-up
+              </button>
+            </div>
+          )}
+
           {/* Lead Overview & Quick Contact Card */}
           <div className="card">
             <div className="card-body flex items-center justify-between flex-wrap gap-4 lead-detail-header-card" style={{ padding: '16px 20px' }}>
@@ -1153,61 +1400,31 @@ export default function LeadDetailClient({
         </div>
       )}
 
-      {/* COMPLETION OUTCOME MODAL */}
-      {completingFollowupId && (
-        <div className="modal-backdrop" onClick={() => setCompletingFollowupId(null)}>
-          <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2 className="modal-title">Mark follow-up complete</h2>
-                <p className="text-meta" style={{ marginTop: 2 }}>Record what was discussed or the outcome</p>
-              </div>
-              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setCompletingFollowupId(null)}>
-                <X size={16} />
-              </button>
-            </div>
+      {/* FOLLOW-UP COMPLETION MODAL */}
+      {selectedFollowupToComplete && (
+        <FollowupCompletionModal
+          isOpen={true}
+          followup={selectedFollowupToComplete}
+          lead={lead}
+          stages={stages}
+          onClose={() => setSelectedFollowupToComplete(null)}
+          onSubmit={handleFollowupCompletionSubmit}
+          currentUserId={profile.id}
+        />
+      )}
 
-            <form onSubmit={submitCompleteFollowup}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                  background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--radius-sm)',
-                }}>
-                  <CheckCircle size={16} style={{ color: '#16a34a', flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: '#166534' }}>
-                    This follow-up will be marked as completed with the current timestamp.
-                  </span>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">
-                    Outcome / Discussion notes
-                    <span style={{ color: 'var(--text-tertiary)', fontWeight: 400, marginLeft: 4 }}>(optional)</span>
-                  </label>
-                  <textarea
-                    className="form-input"
-                    placeholder="What was discussed? What's the next step? Any decisions made..."
-                    value={outcomeNote}
-                    onChange={(e) => setOutcomeNote(e.target.value)}
-                    rows={4}
-                    style={{ resize: 'vertical', minHeight: 100 }}
-                    autoFocus
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setCompletingFollowupId(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={completeLoading}>
-                  <CheckCircle size={14} />
-                  {completeLoading ? 'Saving...' : 'Mark as complete'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* STAGE CHANGE INTERCEPTION MODAL */}
+      {pendingStageChange && (
+        <StageChangeModal
+          isOpen={true}
+          lead={lead}
+          fromStage={pendingStageChange.fromStage}
+          toStage={pendingStageChange.toStage}
+          stages={stages}
+          onConfirm={handleConfirmStageChange}
+          onCancel={() => setPendingStageChange(null)}
+          currentUserId={profile.id}
+        />
       )}
 
       {/* DELETE LEAD CONFIRMATION MODAL */}

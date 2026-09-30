@@ -36,6 +36,7 @@ export default function LeadsClient({
 
   // Available months where leads actually exist
   const [availableMonths, setAvailableMonths] = useState(initialAvailableMonths)
+  const [pendingFollowupLeadIds, setPendingFollowupLeadIds] = useState<string[]>([])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -90,10 +91,17 @@ export default function LeadsClient({
       query = query.eq('assigned_agent_id', profile.id)
     }
 
-    const { data } = await query
-    setLeads((data as Lead[]) ?? [])
+    const [leadsRes, fupsRes] = await Promise.all([
+      query,
+      supabase.from('lead_followups').select('lead_id').eq('is_completed', false),
+    ])
+
+    setLeads((leadsRes.data as Lead[]) ?? [])
+    if (fupsRes.data) {
+      setPendingFollowupLeadIds(fupsRes.data.map((f: any) => f.lead_id as string))
+    }
     setLoading(false)
-  }, [filterDate, customStartDate, customEndDate, filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage, search, profile])
+  }, [filterDate, customStartDate, customEndDate, filterCampaign, filterAdSet, filterAd, filterSource, filterAgent, filterStage, search, profile, supabase])
 
   useEffect(() => {
     fetchLeads()
@@ -420,6 +428,7 @@ export default function LeadsClient({
             loading={loading}
             onLeadMoved={fetchLeads}
             currentUserId={profile.id}
+            pendingFollowupLeadIds={pendingFollowupLeadIds}
           />
         </div>
       ) : (

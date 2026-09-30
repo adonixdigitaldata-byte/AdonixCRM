@@ -11,3 +11,6 @@ supabase/.temp/
 *.md
 !README.md
 !readme.md
+
+reference/
+

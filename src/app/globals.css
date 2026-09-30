@@ -2462,3 +2462,16 @@ textarea.form-input {
     z-index: 1 !important;
   }
 }
+
+/* Responsive 3-column grid */
+.rg-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media screen and (max-width: 900px) {
+  .rg-3 {
+    grid-template-columns: 1fr;
+  }
+}
