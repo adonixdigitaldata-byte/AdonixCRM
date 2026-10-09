@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react'
 import { Profile, Payslip } from '@/types/database'
 import { formatCurrencyAmount, getMonthName } from '@/lib/payroll-utils'
 import PayslipDocument from '@/components/payroll/PayslipDocument'
-import { FileText, Eye, Printer, ShieldCheck, ArrowRight, Archive, Loader2, Download } from 'lucide-react'
+import { FileText, Eye, ShieldCheck, ArrowRight, Archive, Loader2, Download } from 'lucide-react'
 import Link from 'next/link'
 import { exportPayslipsAsZip, downloadSinglePayslipPdf, ZipExportProgress } from '@/lib/payslip-pdf-export'
 
@@ -304,19 +304,6 @@ export default function MyPayslipsClient({ currentProfile, payslips }: Props) {
                           <span>Download PDF</span>
                         </>
                       )}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '6px 10px' }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setViewingPayslip(p)
-                        setTimeout(() => window.print(), 200)
-                      }}
-                      title="Print / Save via Browser"
-                    >
-                      <Printer size={14} />
                     </button>
                   </div>
                 </div>

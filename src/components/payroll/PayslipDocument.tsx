@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { Payslip } from '@/types/database'
 import {
   formatCurrencyAmount,
@@ -9,7 +9,8 @@ import {
   getDaysInMonth,
   getDefaultStatutoryDeductions,
 } from '@/lib/payroll-utils'
-import { Printer, X } from 'lucide-react'
+import { Download, Loader2, X } from 'lucide-react'
+import { downloadSinglePayslipPdf } from '@/lib/payslip-pdf-export'
 
 interface Props {
   payslip: Payslip
@@ -19,22 +20,16 @@ interface Props {
 
 export default function PayslipDocument({ payslip, onClose, isPrintOnly = false }: Props) {
   const printRef = useRef<HTMLDivElement>(null)
+  const [downloading, setDownloading] = useState(false)
 
-  function handlePrint() {
-    const originalTitle = document.title
-    const cleanName = (payslip.employee?.name || 'Employee').replace(/\s+/g, '')
-    const cleanDesignation = (payslip.designation || payslip.employee?.specialization || 'Staff').replace(/\s+/g, '_')
-    const cleanPeriod = `${monthName}_${payslip.year}`
-
-    // Set custom filename for PDF download
-    document.title = `${cleanName}_${cleanDesignation}_Payslip_${cleanPeriod}`
-
-    window.print()
-
-    // Restore original title
-    setTimeout(() => {
-      document.title = originalTitle
-    }, 200)
+  async function handleDownloadPdf() {
+    setDownloading(true)
+    try {
+      await downloadSinglePayslipPdf(payslip)
+    } catch (e) {
+      console.error('Error downloading payslip PDF:', e)
+    }
+    setDownloading(false)
   }
 
   const monthName = getMonthName(payslip.month)
@@ -115,11 +110,13 @@ export default function PayslipDocument({ payslip, onClose, isPrintOnly = false 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 type="button"
-                onClick={handlePrint}
+                onClick={handleDownloadPdf}
+                disabled={downloading}
                 className="btn btn-primary btn-sm"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, padding: '8px 16px' }}
               >
-                <Printer size={15} /> Print / Save as PDF
+                {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                {downloading ? 'Downloading...' : 'Download PDF'}
               </button>
               {onClose && (
                 <button
