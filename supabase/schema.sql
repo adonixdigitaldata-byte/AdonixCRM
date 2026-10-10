@@ -294,9 +294,18 @@ create table if not exists invoices (
   updated_at timestamptz not null default now()
 );
 
+alter table clients add column if not exists vat_number text;
+alter table clients add column if not exists cr_number text;
+
 alter table invoices add column if not exists discount_type text default 'PERCENTAGE' check (discount_type in ('PERCENTAGE', 'FIXED'));
 alter table invoices add column if not exists discount_value numeric(12,2) default 0;
 alter table invoices add column if not exists discount_amount numeric(12,2) default 0;
+alter table invoices add column if not exists invoice_type text check (invoice_type in ('B2B', 'B2C'));
+alter table invoices add column if not exists zatca_status text default 'PENDING' check (zatca_status in ('NOT_APPLICABLE', 'PENDING', 'CLEARED', 'REPORTED', 'REJECTED'));
+alter table invoices add column if not exists zatca_uuid uuid default gen_random_uuid();
+alter table invoices add column if not exists zatca_hash text;
+alter table invoices add column if not exists previous_invoice_hash text;
+alter table invoices add column if not exists invoice_counter_value integer;
 
 create table if not exists invoice_items (
   id uuid primary key default gen_random_uuid(),

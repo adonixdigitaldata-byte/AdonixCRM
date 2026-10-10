@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, ArrowLeft, Save, Send } from 'lucide-react'
 import type { Profile } from '@/types/database'
 import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
+import { OFFICE_LOCATIONS, type OfficeLocationKey } from '@/lib/constants/officeLocations'
 
 interface LineItem {
   id: string
@@ -18,7 +19,16 @@ interface LineItem {
 
 interface Props {
   profile: Profile
-  existingClients: { id: string; name: string; company?: string; email?: string; phone?: string; address?: string }[]
+  existingClients: {
+    id: string
+    name: string
+    company?: string
+    email?: string
+    phone?: string
+    address?: string
+    vat_number?: string
+    cr_number?: string
+  }[]
 }
 
 function genId() { return Math.random().toString(36).slice(2) }
@@ -30,6 +40,10 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Office Location & Transaction Type
+  const [officeLocation, setOfficeLocation] = useState<OfficeLocationKey>('KSA')
+  const [invoiceType, setInvoiceType] = useState<'B2B' | 'B2C'>('B2B')
+
   // Client
   const [useExistingClient, setUseExistingClient] = useState(existingClients.length > 0)
   const [selectedClientId, setSelectedClientId] = useState(existingClients[0]?.id ?? '')
@@ -38,6 +52,17 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
   const [clientEmail, setClientEmail] = useState(existingClients[0]?.email ?? '')
   const [clientPhone, setClientPhone] = useState(existingClients[0]?.phone ?? '')
   const [clientAddress, setClientAddress] = useState(existingClients[0]?.address ?? '')
+  const [clientVat, setClientVat] = useState(existingClients[0]?.vat_number ?? '')
+  const [clientCr, setClientCr] = useState(existingClients[0]?.cr_number ?? '')
+
+  // Bank details with defaults from office location
+  const defaultBank = OFFICE_LOCATIONS.KSA.bankDetails
+  const [bankName, setBankName] = useState(defaultBank?.bankName ?? '')
+  const [bankAccountName, setBankAccountName] = useState(defaultBank?.accountName ?? '')
+  const [bankAccountNumber, setBankAccountNumber] = useState(defaultBank?.accountNumber ?? '')
+  const [bankIban, setBankIban] = useState(defaultBank?.iban ?? '')
+  const [bankSwift, setBankSwift] = useState(defaultBank?.swiftCode ?? '')
+  const [bankIfsc, setBankIfsc] = useState(defaultBank?.ifscCode ?? '')
 
   // Invoice details
   const [currency, setCurrency] = useState('SAR')
@@ -60,6 +85,27 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
     { id: genId(), description: '', qty: 1, unit_price: 0, discount_percent: 0, amount: 0 },
   ])
 
+  function handleOfficeChange(loc: OfficeLocationKey) {
+    setOfficeLocation(loc)
+    const newBank = OFFICE_LOCATIONS[loc]?.bankDetails
+    setBankName(newBank?.bankName || '')
+    setBankAccountName(newBank?.accountName || '')
+    setBankAccountNumber(newBank?.accountNumber || '')
+    setBankIban(newBank?.iban || '')
+    setBankSwift(newBank?.swiftCode || '')
+    setBankIfsc(newBank?.ifscCode || '')
+
+    if (loc === 'HYDERABAD') {
+      setCurrency('INR')
+      setTaxPercent(18)
+      setTerms(`1. Payment due within specified period.\n2. Payment via NEFT / RTGS / UPI to company bank account.\n3. Invoices once issued are subject to commercial contract terms.`)
+    } else {
+      setCurrency('SAR')
+      setTaxPercent(15)
+      setTerms(`1. Payment due upon receipt or as specified above.\n2. Payment via bank transfer or cheque.\n3. Tax: 15% VAT applicable as per KSA tax regulations.`)
+    }
+  }
+
   function handleClientSelect(id: string) {
     setSelectedClientId(id)
     const found = existingClients.find(c => c.id === id)
@@ -69,6 +115,8 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
       setClientEmail(found.email ?? '')
       setClientPhone(found.phone ?? '')
       setClientAddress(found.address ?? '')
+      setClientVat(found.vat_number ?? '')
+      setClientCr(found.cr_number ?? '')
     }
   }
 
@@ -111,14 +159,23 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
     try {
       let clientId = selectedClientId || (existingClients.length > 0 ? existingClients[0].id : '')
 
+      // 1. Prepare / update Client
       if (useExistingClient) {
         if (!clientId) {
           setError('Please select an existing client from the dropdown.')
           setLoading(false)
           return
         }
+        // Update client VAT, CR, & Address if provided
+        if (clientVat.trim() || clientCr.trim() || clientAddress.trim() || clientPhone.trim()) {
+          await supabase.from('clients').update({
+            vat_number: clientVat.trim() || null,
+            cr_number: clientCr.trim() || null,
+            address: clientAddress.trim() || null,
+            phone: clientPhone.trim() || null,
+          }).eq('id', clientId)
+        }
       } else {
-
         if (!clientName.trim()) {
           setError('Client name is required when creating a new client.')
           setLoading(false)
@@ -133,6 +190,8 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
             email: clientEmail.trim() || null,
             phone: clientPhone.trim() || null,
             address: clientAddress.trim() || null,
+            vat_number: clientVat.trim() || null,
+            cr_number: clientCr.trim() || null,
             assigned_agent_id: profile.id,
           })
           .select('id')
@@ -142,53 +201,43 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
         clientId = newClient.id
       }
 
-
-      const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`
-
-      const { data: invoice, error: invoiceErr } = await supabase
-        .from('invoices')
-        .insert({
-          invoice_number: invoiceNumber,
-          client_id: clientId,
+      // 2. Call atomic sequential creation endpoint with Phase 1 compliance
+      const res = await fetch('/api/invoices/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          officeLocation,
+          invoiceType,
           currency,
-          issue_date: issueDate,
-          due_date: dueDate || null,
+          issueDate,
+          dueDate: dueDate || null,
           subtotal,
-          discount_type: discountType,
-          discount_value: Number(discountValue) || 0,
-          discount_amount: discountAmount,
-          tax_percent: taxPercent,
-          tax_amount: taxAmount,
+          discountType,
+          discountValue: Number(discountValue) || 0,
+          discountAmount,
+          taxPercent,
+          taxAmount,
           total,
-          amount_paid: 0,
           status,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
-          created_by: profile.id,
-        })
-        .select('id')
-        .single()
+          bankName: bankName.trim() || null,
+          bankAccountName: bankAccountName.trim() || null,
+          bankAccountNumber: bankAccountNumber.trim() || null,
+          bankIban: bankIban.trim() || null,
+          bankSwift: bankSwift.trim() || null,
+          bankIfsc: bankIfsc.trim() || null,
+          items: items.filter(i => i.description.trim()),
+        }),
+      })
 
-      if (invoiceErr) throw invoiceErr
-
-      if (items.length > 0) {
-        const { error: itemsErr } = await supabase
-          .from('invoice_items')
-          .insert(
-            items.filter(i => i.description.trim()).map((item, idx) => ({
-              invoice_id: invoice.id,
-              description: item.description.trim(),
-              qty: item.qty,
-              unit_price: item.unit_price,
-              discount_percent: item.discount_percent || 0,
-              amount: item.amount,
-              sort_order: idx,
-            }))
-          )
-        if (itemsErr) throw itemsErr
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create invoice')
       }
 
-      router.push(`/invoices/${invoice.id}`)
+      router.push(`/invoices/${data.invoice.id}`)
     } catch (err: any) {
       setError(err.message || 'Failed to create invoice')
       setLoading(false)
@@ -280,10 +329,75 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
                       </div>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Billing Address</label>
-                      <textarea className="form-input" rows={3} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} style={{ resize: 'vertical' }} />
+                      <label className="form-label">Client Address</label>
+                      <input
+                        className="form-input"
+                        placeholder="Street address, City, Country"
+                        value={clientAddress}
+                        onChange={(e) => setClientAddress(e.target.value)}
+                      />
+                    </div>
+                    <div className="rg-2">
+                      <div className="form-group">
+                        <label className="form-label">
+                          Buyer VAT Number (الرقم الضريبي)
+                          {officeLocation === 'KSA' && invoiceType === 'B2B' && <span style={{ color: 'var(--accent)', marginLeft: 4 }}>*Mandatory for B2B</span>}
+                        </label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. 300000000000003 (15 digits)"
+                          value={clientVat}
+                          onChange={(e) => setClientVat(e.target.value)}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Buyer CR / 700 Number (السجل التجاري)</label>
+                        <input
+                          className="form-input"
+                          placeholder="e.g. 7001234567 or CR"
+                          value={clientCr}
+                          onChange={(e) => setClientCr(e.target.value)}
+                        />
+                      </div>
                     </div>
                   </>
+                )}
+
+                {/* If existing client is selected, show their VAT, CR & Address with quick edit */}
+                {useExistingClient && existingClients.length > 0 && (
+                  <div style={{ paddingTop: 8, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="rg-2">
+                      <div className="form-group">
+                        <label className="form-label" style={{ fontSize: 12 }}>
+                          Client VAT Number {officeLocation === 'KSA' && invoiceType === 'B2B' && <span style={{ color: 'var(--accent)' }}>(B2B Mandatory)</span>}
+                        </label>
+                        <input
+                          className="form-input"
+                          placeholder="15-digit Tax No. (الرقم الضريبي)"
+                          value={clientVat}
+                          onChange={(e) => setClientVat(e.target.value)}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label" style={{ fontSize: 12 }}>Client CR / License No.</label>
+                        <input
+                          className="form-input"
+                          placeholder="Commercial Registration (السجل التجاري)"
+                          value={clientCr}
+                          onChange={(e) => setClientCr(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: 12 }}>Client Address</label>
+                      <input
+                        className="form-input"
+                        placeholder="Client physical/billing address"
+                        value={clientAddress}
+                        onChange={(e) => setClientAddress(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -291,7 +405,7 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
             {/* Line Items */}
             <div className="card">
               <div className="card-header"><span className="text-section-header">Line items</span></div>
-              <div className="hide-mobile" style={{ overflowX: 'auto' }}>
+              <div style={{ overflowX: 'auto' }}>
                 <table className="table" style={{ minWidth: 620 }}>
                   <thead>
                     <tr>
@@ -363,88 +477,83 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
                   </tbody>
                 </table>
               </div>
-
-              <div className="show-mobile flex-col gap-3" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-                {items.map((item, index) => (
-                  <div key={item.id} className="card" style={{ padding: 14, background: 'var(--bg)', border: '1px solid var(--border)', marginBottom: 0 }}>
-                    <div className="flex justify-between items-center" style={{ marginBottom: 12 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Item #{index + 1}</span>
-                      {items.length > 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-icon btn-xs"
-                          onClick={() => removeItem(item.id)}
-                          style={{ color: 'var(--danger)' }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <div className="form-group">
-                        <label className="form-label" style={{ fontSize: 11 }}>Description</label>
-                        <input
-                          className="form-input"
-                          placeholder="Service or product description"
-                          value={item.description}
-                          onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                          style={{ fontSize: 13 }}
-                        />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: 11 }}>Qty</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className="form-input"
-                            value={item.qty}
-                            onChange={(e) => updateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
-                            style={{ fontSize: 13 }}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: 11 }}>Unit price</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className="form-input"
-                            value={item.unit_price}
-                            onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                            style={{ fontSize: 13 }}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: 11 }}>Disc %</label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step="0.1"
-                            placeholder="0%"
-                            className="form-input"
-                            value={item.discount_percent || ''}
-                            onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
-                            style={{ fontSize: 13 }}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center" style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Amount</span>
-                        <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {currency} {item.amount.toLocaleString('en', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
               <div className="card-footer">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>
                   <Plus size={13} /> Add line item
                 </button>
+              </div>
+            </div>
+
+            {/* Official Bank Remittance Instructions */}
+            <div className="card">
+              <div className="card-header">
+                <span className="text-section-header">Official Bank Remittance Instructions</span>
+              </div>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="rg-2">
+                  <div className="form-group">
+                    <label className="form-label">Bank Name</label>
+                    <input
+                      className="form-input"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="e.g. Al Rajhi Bank / HDFC Bank"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Account Holder Name</label>
+                    <input
+                      className="form-input"
+                      value={bankAccountName}
+                      onChange={(e) => setBankAccountName(e.target.value)}
+                      placeholder="Beneficiary legal entity name"
+                    />
+                  </div>
+                </div>
+
+                <div className="rg-2">
+                  <div className="form-group">
+                    <label className="form-label">IBAN Number</label>
+                    <input
+                      className="form-input font-mono"
+                      value={bankIban}
+                      onChange={(e) => setBankIban(e.target.value)}
+                      placeholder="e.g. SA0000000000000000000000"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Account Number</label>
+                    <input
+                      className="form-input font-mono"
+                      value={bankAccountNumber}
+                      onChange={(e) => setBankAccountNumber(e.target.value)}
+                      placeholder="Account Number"
+                    />
+                  </div>
+                </div>
+
+                <div className="rg-2">
+                  <div className="form-group">
+                    <label className="form-label">SWIFT / BIC Code</label>
+                    <input
+                      className="form-input font-mono"
+                      value={bankSwift}
+                      onChange={(e) => setBankSwift(e.target.value)}
+                      placeholder="e.g. RJHISARI"
+                    />
+                  </div>
+                  {officeLocation === 'HYDERABAD' && (
+                    <div className="form-group">
+                      <label className="form-label">IFSC Code (India)</label>
+                      <input
+                        className="form-input font-mono"
+                        value={bankIfsc}
+                        onChange={(e) => setBankIfsc(e.target.value)}
+                        placeholder="e.g. HDFC0000123"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -471,6 +580,46 @@ export default function InvoiceBuilderClient({ profile, existingClients }: Props
             <div className="card">
               <div className="card-header"><span className="text-section-header">Details</span></div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label form-label-required">Issuing Entity / Office</label>
+                  <select
+                    className="form-select"
+                    value={officeLocation}
+                    onChange={(e) => handleOfficeChange(e.target.value as OfficeLocationKey)}
+                  >
+                    <option value="KSA">🇸🇦 KSA (Asaheeb &amp; Adonix - ZATCA E-Invoice)</option>
+                    <option value="HYDERABAD">🇮🇳 India (Hyderabad Office - Non-ZATCA)</option>
+                  </select>
+                </div>
+
+                {officeLocation === 'KSA' && (
+                  <div className="form-group" style={{ padding: '8px 10px', background: 'rgba(37, 99, 235, 0.05)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(37, 99, 235, 0.2)' }}>
+                    <label className="form-label" style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+                      ZATCA Invoice Category
+                    </label>
+                    <div className="flex gap-3" style={{ marginTop: 4 }}>
+                      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="inv_type"
+                          checked={invoiceType === 'B2B'}
+                          onChange={() => setInvoiceType('B2B')}
+                        />
+                        <span><strong>B2B</strong> (Standard / فاتورة ضريبية)</span>
+                      </label>
+                      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="inv_type"
+                          checked={invoiceType === 'B2C'}
+                          onChange={() => setInvoiceType('B2C')}
+                        />
+                        <span><strong>B2C</strong> (Simplified / مبسطة)</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label className="form-label">Currency</label>
                   <select className="form-select" value={currency} onChange={(e) => setCurrency(e.target.value)}>

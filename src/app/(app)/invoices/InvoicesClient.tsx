@@ -78,13 +78,57 @@ export default function InvoicesClient({ invoices }: Props) {
     return matchesSearch && matchesStatus && matchesDate
   })
 
-  // Exclude CANCELLED invoices from total invoiced and outstanding calculations
-  const activeInvoices = filtered.filter((inv) => inv.status !== 'CANCELLED')
+  // Map of credit notes & debit notes by referenced invoice id or invoice number
+  const creditNotesByRef: Record<string, number> = {}
+  const debitNotesByRef: Record<string, number> = {}
 
-  const totalInvoiced = activeInvoices.reduce((acc, inv) => acc + convertToSAR(Number(inv.total), inv.currency), 0)
-  const totalCollected = activeInvoices.reduce((acc, inv) => acc + convertToSAR(Number(inv.amount_paid), inv.currency), 0)
-  const totalOutstanding = totalInvoiced - totalCollected
-  const overdueCount = activeInvoices.filter(getIsOverdue).length
+  invoices.forEach((inv) => {
+    if (inv.is_credit_note && inv.status !== 'CANCELLED') {
+      const val = convertToSAR(Number(inv.total), inv.currency)
+      if (inv.reference_invoice_id) {
+        creditNotesByRef[inv.reference_invoice_id] = (creditNotesByRef[inv.reference_invoice_id] || 0) + val
+      }
+      if (inv.reference_invoice_number) {
+        creditNotesByRef[inv.reference_invoice_number] = (creditNotesByRef[inv.reference_invoice_number] || 0) + val
+      }
+    }
+    if (inv.is_debit_note && inv.status !== 'CANCELLED') {
+      const val = convertToSAR(Number(inv.total), inv.currency)
+      if (inv.reference_invoice_id) {
+        debitNotesByRef[inv.reference_invoice_id] = (debitNotesByRef[inv.reference_invoice_id] || 0) + val
+      }
+      if (inv.reference_invoice_number) {
+        debitNotesByRef[inv.reference_invoice_number] = (debitNotesByRef[inv.reference_invoice_number] || 0) + val
+      }
+    }
+  })
+
+  // Financial Calculations
+  const creditNotes = filtered.filter((inv) => inv.is_credit_note && inv.status !== 'CANCELLED')
+  const debitNotes = filtered.filter((inv) => inv.is_debit_note && inv.status !== 'CANCELLED')
+  const totalCreditNotes = creditNotes.reduce((acc, inv) => acc + convertToSAR(Number(inv.total), inv.currency), 0)
+  const totalDebitNotes = debitNotes.reduce((acc, inv) => acc + convertToSAR(Number(inv.total), inv.currency), 0)
+
+  // Standard non-credit/debit invoices
+  const standardInvoices = filtered.filter((inv) => !inv.is_credit_note && !inv.is_debit_note && inv.status !== 'CANCELLED')
+  const issuedStandardInvoices = standardInvoices.filter((inv) => inv.status !== 'DRAFT')
+
+  const totalGrossInvoiced = standardInvoices.reduce((acc, inv) => acc + convertToSAR(Number(inv.total), inv.currency), 0)
+  
+  // Net Billed = Gross Invoiced + Debit Notes - Credit Notes
+  const netInvoiced = Math.max(0, totalGrossInvoiced + totalDebitNotes - totalCreditNotes)
+  
+  // Total Collected = All payments recorded in the database
+  const totalCollected = filtered.reduce((acc, inv) => acc + convertToSAR(Number(inv.amount_paid || 0), inv.currency), 0)
+  
+  // Outstanding Receivables = Net Issued Billed - Amount Collected
+  const netIssuedInvoiced = Math.max(
+    0,
+    issuedStandardInvoices.reduce((acc, inv) => acc + convertToSAR(Number(inv.total), inv.currency), 0) + totalDebitNotes - totalCreditNotes
+  )
+  const totalOutstanding = Math.max(0, netIssuedInvoiced - totalCollected)
+  
+  const overdueCount = issuedStandardInvoices.filter(getIsOverdue).length
 
   const hasActiveFilters = search || statusFilter !== 'ALL' || dateFilter !== 'ALL' || customStartDate || customEndDate
 
@@ -103,7 +147,7 @@ export default function InvoicesClient({ invoices }: Props) {
           <h1 className="text-page-title">Invoices & Receivables</h1>
           <p className="text-meta" style={{ marginTop: 2 }}>
             {filtered.length} of {invoices.length} invoice{invoices.length !== 1 ? 's' : ''}
-            {hasActiveFilters ? ' (filtered)' : ''} · Track billing, partial payments & collections
+            {hasActiveFilters ? ' (filtered)' : ''} · Track billing, credit notes & collections
           </p>
         </div>
         <Link href="/invoices/new" className="btn btn-primary btn-sm">
@@ -114,16 +158,21 @@ export default function InvoicesClient({ invoices }: Props) {
 
       <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Financial Analytics Bar */}
-        <div className="rg-stats">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <div className="card" style={{ padding: '14px 16px' }}>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Total Invoiced</span>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Net Invoiced (Billed)</span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: 'var(--text-primary)' }}>
-              SAR {totalInvoiced.toLocaleString('en', { minimumFractionDigits: 2 })}
+              SAR {netInvoiced.toLocaleString('en', { minimumFractionDigits: 2 })}
             </div>
+            {totalCreditNotes > 0 && (
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                Gross: SAR {totalGrossInvoiced.toLocaleString('en', { minimumFractionDigits: 0 })}
+              </span>
+            )}
           </div>
 
           <div className="card" style={{ padding: '14px 16px' }}>
-            <span style={{ fontSize: 12, color: 'var(--success)', fontWeight: 500 }}>Amount Collected (Received)</span>
+            <span style={{ fontSize: 12, color: 'var(--success)', fontWeight: 500 }}>Amount Collected</span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: 'var(--success)' }}>
               SAR {totalCollected.toLocaleString('en', { minimumFractionDigits: 2 })}
             </div>
@@ -131,11 +180,21 @@ export default function InvoicesClient({ invoices }: Props) {
 
           <div className="card" style={{ padding: '14px 16px' }}>
             <span style={{ fontSize: 12, color: totalOutstanding > 0 ? 'var(--warning)' : 'var(--text-secondary)', fontWeight: 500 }}>
-              Outstanding (To Receive)
+              Outstanding (Receivables)
             </span>
             <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: totalOutstanding > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>
               SAR {totalOutstanding.toLocaleString('en', { minimumFractionDigits: 2 })}
             </div>
+          </div>
+
+          <div className="card" style={{ padding: '14px 16px', background: totalCreditNotes > 0 ? '#fffbeb' : undefined, borderColor: totalCreditNotes > 0 ? '#fde68a' : undefined }}>
+            <span style={{ fontSize: 12, color: '#b45309', fontWeight: 500 }}>Credit Notes Issued</span>
+            <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: '#b45309' }}>
+              SAR {totalCreditNotes.toLocaleString('en', { minimumFractionDigits: 2 })}
+            </div>
+            <span style={{ fontSize: 11, color: '#b45309', opacity: 0.8, marginTop: 2 }}>
+              {creditNotes.length} note{creditNotes.length !== 1 ? 's' : ''} (reversals)
+            </span>
           </div>
 
           <div className="card" style={{ padding: '14px 16px' }}>
@@ -304,8 +363,26 @@ export default function InvoicesClient({ invoices }: Props) {
               <tbody>
                 {filtered.map((inv: any) => {
                   const curr = inv.currency ?? 'SAR'
-                  const balance = inv.status === 'CANCELLED' ? 0 : Number(inv.total) - Number(inv.amount_paid)
-                  const isOverdue = getIsOverdue(inv)
+                  const isCN = Boolean(inv.is_credit_note)
+                  const isDN = Boolean(inv.is_debit_note)
+                  const isCancelled = inv.status === 'CANCELLED'
+                  const isDraft = inv.status === 'DRAFT'
+
+                  const creditedTotal = (inv.id && creditNotesByRef[inv.id]) || (inv.invoice_number && creditNotesByRef[inv.invoice_number]) || 0
+                  const debitedTotal = (inv.id && debitNotesByRef[inv.id]) || (inv.invoice_number && debitNotesByRef[inv.invoice_number]) || 0
+
+                  const netInvoiceTotal = isCN
+                    ? Number(inv.total)
+                    : isDN
+                    ? Number(inv.total)
+                    : Math.max(0, Number(inv.total) + debitedTotal - creditedTotal)
+
+                  const isFullyCredited = !isCN && !isDN && creditedTotal >= Number(inv.total) && Number(inv.total) > 0
+                  const balance = (isCancelled || isCN || isFullyCredited)
+                    ? 0
+                    : Math.max(0, netInvoiceTotal - Number(inv.amount_paid || 0))
+                  const isOverdue = !isCN && !isDN && !isFullyCredited && getIsOverdue(inv)
+
                   return (
                     <tr
                       key={inv.id}
@@ -317,9 +394,26 @@ export default function InvoicesClient({ invoices }: Props) {
                         }
                       }}
                     >
-                      <td style={{ fontWeight: 600 }}>
+                      <td>
                         <Link href={`/invoices/${inv.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                          {inv.invoice_number}
+                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>{inv.invoice_number}</span>
+                            {isCN && (
+                              <span className="badge badge-warning" style={{ fontSize: 9, padding: '1px 5px', height: 16 }}>
+                                CREDIT NOTE
+                              </span>
+                            )}
+                            {isDN && (
+                              <span className="badge" style={{ fontSize: 9, padding: '1px 5px', height: 16, background: '#ede9fe', color: '#6d28d9', borderColor: '#ddd6fe' }}>
+                                DEBIT NOTE
+                              </span>
+                            )}
+                          </div>
+                          {inv.reference_invoice_number && (
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                              Ref: {inv.reference_invoice_number}
+                            </div>
+                          )}
                         </Link>
                       </td>
                       <td>
@@ -331,9 +425,23 @@ export default function InvoicesClient({ invoices }: Props) {
                         </Link>
                       </td>
                       <td>
-                        <span className={`badge ${isOverdue ? 'badge-danger' : (STATUS_BADGE[inv.status] ?? 'badge-default')}`}>
-                          {isOverdue ? 'OVERDUE' : inv.status.replace('_', ' ')}
-                        </span>
+                        {isCN ? (
+                          <span className="badge badge-warning">
+                            CREDIT NOTE
+                          </span>
+                        ) : isDN ? (
+                          <span className="badge" style={{ background: '#ede9fe', color: '#6d28d9', borderColor: '#ddd6fe' }}>
+                            DEBIT NOTE
+                          </span>
+                        ) : isFullyCredited ? (
+                          <span className="badge badge-default" style={{ color: '#b45309', background: '#fffbeb', borderColor: '#fde68a' }}>
+                            CREDITED / REVERSED
+                          </span>
+                        ) : (
+                          <span className={`badge ${isOverdue ? 'badge-danger' : (STATUS_BADGE[inv.status] ?? 'badge-default')}`}>
+                            {isOverdue ? 'OVERDUE' : inv.status.replace('_', ' ')}
+                          </span>
+                        )}
                       </td>
                       <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                         {format(new Date(inv.issue_date), 'dd MMM yyyy')}
@@ -343,19 +451,54 @@ export default function InvoicesClient({ invoices }: Props) {
                         color: isOverdue ? 'var(--danger)' : 'var(--text-secondary)',
                         fontWeight: isOverdue ? 600 : 400,
                       }}>
-                        {inv.due_date ? format(new Date(inv.due_date), 'dd MMM yyyy') : '—'}
+                        {isCN ? '—' : inv.due_date ? format(new Date(inv.due_date), 'dd MMM yyyy') : '—'}
                       </td>
-                      <td className="num tabular-nums" style={{ fontWeight: 600 }}>
-                        {curr} {Number(inv.total).toLocaleString('en', { minimumFractionDigits: 2 })}
+                      <td className="num tabular-nums" style={{ fontWeight: 600, color: isCN ? '#b45309' : isDN ? '#6d28d9' : undefined }}>
+                        {isCN ? (
+                          `- ${curr} ${Number(inv.total).toLocaleString('en', { minimumFractionDigits: 2 })}`
+                        ) : isDN ? (
+                          `+ ${curr} ${Number(inv.total).toLocaleString('en', { minimumFractionDigits: 2 })}`
+                        ) : (
+                          <div>
+                            <div>{curr} {Number(inv.total).toLocaleString('en', { minimumFractionDigits: 2 })}</div>
+                            {creditedTotal > 0 && (
+                              <div style={{ fontSize: 10, color: '#b45309', fontWeight: 500 }}>
+                                -{curr} {creditedTotal.toLocaleString('en', { minimumFractionDigits: 2 })} (Credit Note)
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </td>
-                      <td className="num tabular-nums" style={{ color: 'var(--success)' }}>
-                        {curr} {Number(inv.amount_paid).toLocaleString('en', { minimumFractionDigits: 2 })}
+                      <td className="num tabular-nums" style={{ color: isCN ? 'var(--text-tertiary)' : 'var(--success)' }}>
+                        {isCN ? '—' : `${curr} ${Number(inv.amount_paid || 0).toLocaleString('en', { minimumFractionDigits: 2 })}`}
                       </td>
                       <td className="num tabular-nums" style={{
                         fontWeight: balance > 0 ? 600 : 400,
-                        color: balance > 0 ? (isOverdue ? 'var(--danger)' : 'var(--text-primary)') : 'var(--success)',
+                        color: isCN
+                          ? '#b45309'
+                          : isDN
+                          ? '#6d28d9'
+                          : (isCancelled || isFullyCredited)
+                          ? 'var(--text-tertiary)'
+                          : isDraft
+                          ? 'var(--text-secondary)'
+                          : balance > 0
+                          ? (isOverdue ? 'var(--danger)' : 'var(--text-primary)')
+                          : 'var(--success)',
                       }}>
-                        {curr} {balance.toLocaleString('en', { minimumFractionDigits: 2 })}
+                        {isCN ? (
+                          <span style={{ fontSize: 11, color: '#b45309', fontWeight: 600 }}>Credit Reversal</span>
+                        ) : isCancelled ? (
+                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Cancelled</span>
+                        ) : isFullyCredited ? (
+                          <span style={{ fontSize: 11, color: '#b45309', fontWeight: 600 }}>Settled by Credit Note</span>
+                        ) : isDraft ? (
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Draft (Unissued)</span>
+                        ) : isDN ? (
+                          <span>+ {curr} {balance.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
+                        ) : (
+                          `${curr} ${balance.toLocaleString('en', { minimumFractionDigits: 2 })}`
+                        )}
                       </td>
                       <td>
                         <Link href={`/invoices/${inv.id}`} className="btn btn-ghost btn-xs">

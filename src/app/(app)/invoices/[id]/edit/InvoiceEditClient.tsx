@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, ArrowLeft, Save, Send } from 'lucide-react'
+import { Plus, Trash2, ArrowLeft, Save, Send, Building } from 'lucide-react'
 import type { Invoice, Profile } from '@/types/database'
 import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
+import { OFFICE_LOCATIONS, type OfficeLocationKey } from '@/lib/constants/officeLocations'
 
 interface LineItem {
   id: string
@@ -31,6 +32,14 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Office Location & Compliance
+  const [officeLocation, setOfficeLocation] = useState<OfficeLocationKey>(
+    (invoice.office_location as OfficeLocationKey) || 'KSA'
+  )
+  const [invoiceType, setInvoiceType] = useState<'B2B' | 'B2C'>(
+    (invoice.invoice_type as 'B2B' | 'B2C') || 'B2B'
+  )
+
   // Client details
   const [selectedClientId, setSelectedClientId] = useState(invoice.client_id ?? '')
   const [clientName, setClientName] = useState(invoice.client?.name ?? '')
@@ -38,13 +47,24 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
   const [clientEmail, setClientEmail] = useState(invoice.client?.email ?? '')
   const [clientPhone, setClientPhone] = useState(invoice.client?.phone ?? '')
   const [clientAddress, setClientAddress] = useState(invoice.client?.address ?? '')
+  const [clientVat, setClientVat] = useState(invoice.client?.vat_number ?? '')
+  const [clientCr, setClientCr] = useState(invoice.client?.cr_number ?? '')
 
   // Invoice details
-  const [currency, setCurrency] = useState(invoice.currency ?? 'SAR')
+  const [currency, setCurrency] = useState(invoice.currency ?? (invoice.office_location === 'HYDERABAD' ? 'INR' : 'SAR'))
   const [issueDate, setIssueDate] = useState(invoice.issue_date ?? new Date().toISOString().slice(0, 10))
   const [dueDate, setDueDate] = useState(invoice.due_date ?? '')
-  const [taxPercent, setTaxPercent] = useState(Number(invoice.tax_percent ?? 15))
+  const [taxPercent, setTaxPercent] = useState(Number(invoice.tax_percent ?? (invoice.office_location === 'HYDERABAD' ? 18 : 15)))
   const [status, setStatus] = useState(invoice.status)
+
+  // Custom Bank Remittance Details
+  const defaultBank = OFFICE_LOCATIONS[officeLocation]?.bankDetails
+  const [bankName, setBankName] = useState(invoice.bank_name ?? defaultBank?.bankName ?? '')
+  const [bankAccountName, setBankAccountName] = useState(invoice.bank_account_name ?? defaultBank?.accountName ?? '')
+  const [bankAccountNumber, setBankAccountNumber] = useState(invoice.bank_account_number ?? defaultBank?.accountNumber ?? '')
+  const [bankIban, setBankIban] = useState(invoice.bank_iban ?? defaultBank?.iban ?? '')
+  const [bankSwift, setBankSwift] = useState(invoice.bank_swift ?? defaultBank?.swiftCode ?? '')
+  const [bankIfsc, setBankIfsc] = useState(invoice.bank_ifsc ?? defaultBank?.ifscCode ?? '')
 
   // Overall Discount
   const [discountType, setDiscountType] = useState<'PERCENTAGE' | 'FIXED'>(invoice.discount_type ?? 'PERCENTAGE')
@@ -52,9 +72,10 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
 
   // Notes & Terms
   const [notes, setNotes] = useState(invoice.notes ?? '')
-  const [terms, setTerms] = useState(invoice.terms ?? `1. Payment due upon receipt or as specified above.
-2. Payment via bank transfer or cheque.
-3. Tax: 15% VAT applicable as per KSA tax regulations.`)
+  const [terms, setTerms] = useState(invoice.terms ?? (officeLocation === 'KSA'
+    ? `1. Payment due upon receipt or as specified above.\n2. Payment via bank transfer or cheque.\n3. Tax: 15% VAT applicable as per KSA tax regulations.`
+    : `1. Payment due within specified period.\n2. Payment via NEFT / RTGS / UPI to company bank account.\n3. Invoices once issued are subject to commercial contract terms.`
+  ))
 
   // Line items
   const [items, setItems] = useState<LineItem[]>(
@@ -70,6 +91,25 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
       : [{ id: genId(), description: '', qty: 1, unit_price: 0, discount_percent: 0, amount: 0 }]
   )
 
+  function handleOfficeChange(loc: OfficeLocationKey) {
+    setOfficeLocation(loc)
+    const newBank = OFFICE_LOCATIONS[loc]?.bankDetails
+    setBankName(newBank?.bankName || '')
+    setBankAccountName(newBank?.accountName || '')
+    setBankAccountNumber(newBank?.accountNumber || '')
+    setBankIban(newBank?.iban || '')
+    setBankSwift(newBank?.swiftCode || '')
+    setBankIfsc(newBank?.ifscCode || '')
+
+    if (loc === 'HYDERABAD') {
+      if (currency === 'SAR') setCurrency('INR')
+      if (taxPercent === 15) setTaxPercent(18)
+    } else {
+      if (currency === 'INR') setCurrency('SAR')
+      if (taxPercent === 18) setTaxPercent(15)
+    }
+  }
+
   function handleClientSelect(id: string) {
     setSelectedClientId(id)
     const found = clients.find(c => c.id === id)
@@ -79,6 +119,8 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
       setClientEmail(found.email ?? '')
       setClientPhone(found.phone ?? '')
       setClientAddress(found.address ?? '')
+      setClientVat(found.vat_number ?? '')
+      setClientCr(found.cr_number ?? '')
     }
   }
 
@@ -126,6 +168,8 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
         email: clientEmail.trim() || null,
         phone: clientPhone.trim() || null,
         address: clientAddress.trim() || null,
+        vat_number: clientVat.trim() || null,
+        cr_number: clientCr.trim() || null,
       }).eq('id', selectedClientId)
     }
 
@@ -133,6 +177,8 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
       .from('invoices')
       .update({
         client_id: selectedClientId || invoice.client_id,
+        office_location: officeLocation,
+        invoice_type: officeLocation === 'KSA' ? invoiceType : null,
         currency,
         issue_date: issueDate,
         due_date: dueDate || null,
@@ -146,6 +192,12 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
         status: targetStatus,
         notes: notes.trim() || null,
         terms: terms.trim() || null,
+        bank_name: bankName.trim() || null,
+        bank_account_name: bankAccountName.trim() || null,
+        bank_account_number: bankAccountNumber.trim() || null,
+        bank_iban: bankIban.trim() || null,
+        bank_swift: bankSwift.trim() || null,
+        bank_ifsc: bankIfsc.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', invoice.id)
@@ -165,8 +217,79 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
       }))
     )
 
+    // Log the edit event into immutable audit trail
+    try {
+      await supabase.from('invoice_audit_logs').insert({
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        action: 'DRAFT_EDITED',
+        performed_by: profile.id,
+        previous_state: {
+          subtotal: invoice.subtotal,
+          total: invoice.total,
+          items_count: invoice.items?.length,
+        },
+        new_state: {
+          subtotal,
+          total,
+          items_count: items.length,
+          status: targetStatus,
+        },
+      })
+    } catch (auditErr) {
+      console.warn('Audit log write error:', auditErr)
+    }
+
     setLoading(false)
     router.push(`/invoices/${invoice.id}`)
+  }
+
+  const isLocked = invoice.status !== 'DRAFT' || Boolean(invoice.is_credit_note) || Boolean(invoice.is_debit_note)
+
+  if (isLocked) {
+    return (
+      <div>
+        <div className="page-header">
+          <div className="flex items-center gap-3">
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => router.push(`/invoices/${invoice.id}`)}>
+              <ArrowLeft size={16} />
+            </button>
+            <div>
+              <h1 className="text-page-title">{invoice.invoice_number} (Locked)</h1>
+              <p className="text-meta" style={{ marginTop: 2 }}>ZATCA Phase 1 Tamper Protection Enforced</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="page-body" style={{ maxWidth: 700, margin: '40px auto' }}>
+          <div className="card" style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+              {invoice.is_credit_note
+                ? 'Credit Notes Cannot Be Modified'
+                : invoice.is_debit_note
+                ? 'Debit Notes Cannot Be Modified'
+                : 'Issued Invoices Cannot Be Modified'}
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
+              {invoice.is_credit_note || invoice.is_debit_note
+                ? `Under ZATCA Phase 1 regulations, official adjustment notes are immutable legal records. If you need to bill for new services or scope, please create a standard new invoice.`
+                : `Under ZATCA Phase 1 electronic invoicing regulations, once an invoice is issued with status ${invoice.status}, its financial figures, line items, timestamps, and sequential counter cannot be modified or deleted.`}
+            </p>
+            <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 14, borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24, textAlign: 'left', borderLeft: '4px solid var(--accent, #0284c7)' }}>
+              <strong>Compliant Workflow:</strong> {invoice.is_credit_note || invoice.is_debit_note
+                ? 'To bill additional services or charges, click "+ New invoice" from the invoices dashboard.'
+                : 'If you need to make changes, corrections, or cancellations, please issue an official Credit Note.'}
+            </div>
+            <div className="flex justify-center gap-3">
+              <button className="btn btn-outline" onClick={() => router.push(`/invoices/${invoice.id}`)}>
+                <ArrowLeft size={15} /> Return to Document
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -177,8 +300,8 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 className="text-page-title">Edit {invoice.invoice_number}</h1>
-            <p className="text-meta" style={{ marginTop: 2 }}>Modify items, pricing, tax or client details</p>
+            <h1 className="text-page-title">Edit Draft {invoice.invoice_number}</h1>
+            <p className="text-meta" style={{ marginTop: 2 }}>Modify items, pricing, tax, office, compliance, or buyer details</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -186,7 +309,7 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
             <Save size={14} /> Save Draft
           </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSave('SENT')} disabled={loading}>
-            <Send size={14} /> Save & Issue
+            <Send size={14} /> Save &amp; Issue
           </button>
         </div>
       </div>
@@ -196,9 +319,47 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
 
         <div className="rg-main-sidebar-sm">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Office Location & Invoice Type Card */}
+            <div className="card">
+              <div className="card-header"><span className="text-section-header">Office &amp; Compliance Configuration</span></div>
+              <div className="card-body">
+                <div className="rg-2">
+                  <div className="form-group">
+                    <label className="form-label">Billing Entity / Office</label>
+                    <select
+                      className="form-select"
+                      value={officeLocation}
+                      onChange={(e) => handleOfficeChange(e.target.value as OfficeLocationKey)}
+                    >
+                      <option value="KSA">🇸🇦 Saudi Arabia Office (ZATCA Compliant)</option>
+                      <option value="HYDERABAD">🇮🇳 India Office (Hyderabad · Commercial)</option>
+                    </select>
+                  </div>
+                  {officeLocation === 'KSA' ? (
+                    <div className="form-group">
+                      <label className="form-label">ZATCA Transaction Model</label>
+                      <select
+                        className="form-select"
+                        value={invoiceType}
+                        onChange={(e) => setInvoiceType(e.target.value as 'B2B' | 'B2C')}
+                      >
+                        <option value="B2B">B2B - Standard Tax Invoice (Clearance)</option>
+                        <option value="B2C">B2C - Simplified Tax Invoice (Reporting)</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="form-group">
+                      <label className="form-label">Tax Regime</label>
+                      <input className="form-input" disabled value="Indian Commercial / International" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Client Info */}
             <div className="card">
-              <div className="card-header"><span className="text-section-header">Client details</span></div>
+              <div className="card-header"><span className="text-section-header">Buyer / Client Details</span></div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {clients && clients.length > 0 && (
                   <div className="form-group">
@@ -212,14 +373,41 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                 )}
                 <div className="rg-2">
                   <div className="form-group">
-                    <label className="form-label form-label-required">Client Name</label>
+                    <label className="form-label form-label-required">Client Name / Contact Person</label>
                     <input className="form-input" value={clientName} onChange={(e) => setClientName(e.target.value)} required />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Company Name</label>
+                    <label className="form-label">Company / Organization</label>
                     <input className="form-input" value={clientCompany} onChange={(e) => setClientCompany(e.target.value)} />
                   </div>
                 </div>
+
+                {officeLocation === 'KSA' && (
+                  <div className="rg-2">
+                    <div className="form-group">
+                      <label className="form-label">
+                        VAT Number / TRN (15 digits)
+                        {invoiceType === 'B2B' && <span style={{ color: 'var(--accent)', marginLeft: 4 }}>* Required for B2B</span>}
+                      </label>
+                      <input
+                        className="form-input"
+                        placeholder="3xxxxxxxxxxxxxx"
+                        value={clientVat}
+                        onChange={(e) => setClientVat(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">CR Number / 700 / National ID</label>
+                      <input
+                        className="form-input"
+                        placeholder="e.g. 7055349166"
+                        value={clientCr}
+                        onChange={(e) => setClientCr(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="rg-2">
                   <div className="form-group">
                     <label className="form-label">Email</label>
@@ -232,15 +420,15 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                 </div>
                 <div className="form-group">
                   <label className="form-label">Billing Address</label>
-                  <textarea className="form-input" rows={3} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} style={{ resize: 'vertical' }} />
+                  <textarea className="form-input" rows={2} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} style={{ resize: 'vertical' }} />
                 </div>
               </div>
             </div>
 
-            {/* Line Items */}
+            {/* Line Items - SINGLE CLEAN DESKTOP & RESPONSIVE TABLE (NO DUPLICATION) */}
             <div className="card">
               <div className="card-header"><span className="text-section-header">Line items</span></div>
-              <div className="hide-mobile" style={{ overflowX: 'auto' }}>
+              <div style={{ overflowX: 'auto' }}>
                 <table className="table" style={{ minWidth: 620 }}>
                   <thead>
                     <tr>
@@ -248,8 +436,8 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                       <th className="num" style={{ width: 70 }}>Qty</th>
                       <th className="num" style={{ width: 110 }}>Unit price</th>
                       <th className="num" style={{ width: 85 }}>Disc %</th>
-                      <th className="num" style={{ width: 110 }}>Amount</th>
-                      <th style={{ width: 36 }}></th>
+                      <th className="num" style={{ width: 110 }}>Total</th>
+                      <th style={{ width: 44 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -258,53 +446,45 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                         <td>
                           <input
                             className="form-input"
-                            placeholder="Description"
+                            placeholder="Product or service description..."
                             value={item.description}
                             onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                            style={{ border: 'none', fontSize: 13, padding: '4px 0' }}
                           />
                         </td>
                         <td>
                           <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className="form-input"
+                            type="number" min={1} className="form-input num"
                             value={item.qty}
-                            onChange={(e) => updateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
-                            style={{ textAlign: 'right', border: 'none', fontSize: 13, padding: '4px 0' }}
+                            onChange={(e) => updateItem(item.id, 'qty', parseInt(e.target.value) || 1)}
                           />
                         </td>
                         <td>
                           <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className="form-input"
+                            type="number" min={0} step="0.01" className="form-input num"
                             value={item.unit_price}
                             onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                            style={{ textAlign: 'right', border: 'none', fontSize: 13, padding: '4px 0' }}
                           />
                         </td>
                         <td>
                           <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step="0.1"
-                            placeholder="0%"
-                            className="form-input"
+                            type="number" min={0} max={100} step="0.5" className="form-input num"
+                            placeholder="0"
                             value={item.discount_percent || ''}
                             onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
-                            style={{ textAlign: 'right', border: 'none', fontSize: 13, padding: '4px 0' }}
                           />
                         </td>
-                        <td className="num tabular-nums" style={{ fontWeight: 500 }}>
-                          {item.amount.toLocaleString('en', { minimumFractionDigits: 2 })}
+                        <td className="num tabular-nums" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {currency} {item.amount.toLocaleString('en', { minimumFractionDigits: 2 })}
                         </td>
                         <td>
-                          <button type="button" className="btn btn-ghost btn-icon btn-xs" onClick={() => removeItem(item.id)} style={{ color: 'var(--danger)' }}>
-                            <Trash2 size={13} />
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon btn-sm"
+                            style={{ color: 'var(--danger)' }}
+                            onClick={() => removeItem(item.id)}
+                            disabled={items.length === 1}
+                          >
+                            <Trash2 size={14} />
                           </button>
                         </td>
                       </tr>
@@ -312,88 +492,70 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                   </tbody>
                 </table>
               </div>
-
-              <div className="show-mobile flex-col gap-3" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-                {items.map((item, index) => (
-                  <div key={item.id} className="card" style={{ padding: 14, background: 'var(--bg)', border: '1px solid var(--border)', marginBottom: 0 }}>
-                    <div className="flex justify-between items-center" style={{ marginBottom: 12 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Item #{index + 1}</span>
-                      {items.length > 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-icon btn-xs"
-                          onClick={() => removeItem(item.id)}
-                          style={{ color: 'var(--danger)' }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <div className="form-group">
-                        <label className="form-label" style={{ fontSize: 11 }}>Description</label>
-                        <input
-                          className="form-input"
-                          placeholder="Description"
-                          value={item.description}
-                          onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                          style={{ fontSize: 13 }}
-                        />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: 11 }}>Qty</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className="form-input"
-                            value={item.qty}
-                            onChange={(e) => updateItem(item.id, 'qty', parseFloat(e.target.value) || 0)}
-                            style={{ fontSize: 13 }}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: 11 }}>Unit price</label>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className="form-input"
-                            value={item.unit_price}
-                            onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                            style={{ fontSize: 13 }}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: 11 }}>Disc %</label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step="0.1"
-                            placeholder="0%"
-                            className="form-input"
-                            value={item.discount_percent || ''}
-                            onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
-                            style={{ fontSize: 13 }}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center" style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Amount</span>
-                        <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {currency} {item.amount.toLocaleString('en', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
               <div className="card-footer">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={addItem}>
                   <Plus size={13} /> Add line item
                 </button>
+              </div>
+            </div>
+
+            {/* Custom Bank Details Card */}
+            <div className="card">
+              <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Building size={16} />
+                <span className="text-section-header">Bank Account &amp; Remittance Details</span>
+              </div>
+              <div className="card-body">
+                <p className="text-meta" style={{ marginBottom: 12 }}>
+                  These banking details are displayed on the printed invoice for direct wire transfers.
+                </p>
+                <div className="rg-2">
+                  <div className="form-group">
+                    <label className="form-label">Bank Name</label>
+                    <input
+                      className="form-input"
+                      placeholder="e.g. Al Rajhi Bank or HDFC Bank"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Account Holder Name</label>
+                    <input
+                      className="form-input"
+                      placeholder="e.g. Asaheeb and Adonix Developments Co."
+                      value={bankAccountName}
+                      onChange={(e) => setBankAccountName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="rg-2" style={{ marginTop: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label">{officeLocation === 'KSA' ? 'IBAN (International Account)' : 'Account Number'}</label>
+                    <input
+                      className="form-input font-mono"
+                      placeholder={officeLocation === 'KSA' ? 'SA0000000000000000000000' : '50100000000000'}
+                      value={officeLocation === 'KSA' ? bankIban : bankAccountNumber}
+                      onChange={(e) => {
+                        if (officeLocation === 'KSA') setBankIban(e.target.value)
+                        else setBankAccountNumber(e.target.value)
+                      }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{officeLocation === 'KSA' ? 'SWIFT / BIC Code' : 'IFSC Code'}</label>
+                    <input
+                      className="form-input font-mono"
+                      placeholder={officeLocation === 'KSA' ? 'RJHISARI' : 'HDFC0000000'}
+                      value={officeLocation === 'KSA' ? bankSwift : bankIfsc}
+                      onChange={(e) => {
+                        if (officeLocation === 'KSA') setBankSwift(e.target.value)
+                        else setBankIfsc(e.target.value)
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -403,12 +565,12 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
               <div className="card-body">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
                   <div className="form-group">
-                    <label className="form-label">Notes</label>
-                    <textarea className="form-input" rows={3} placeholder="Additional notes or payment instructions..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    <label className="form-label">Notes (Optional reference or instructions)</label>
+                    <textarea className="form-input" rows={2} placeholder="Additional notes or payment instructions..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Terms &amp; Conditions</label>
-                    <textarea className="form-input" rows={5} value={terms} onChange={(e) => setTerms(e.target.value)} />
+                    <textarea className="form-input" rows={4} value={terms} onChange={(e) => setTerms(e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -418,7 +580,7 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
           {/* Right Sidebar */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="card">
-              <div className="card-header"><span className="text-section-header">Details</span></div>
+              <div className="card-header"><span className="text-section-header">Invoice Parameters</span></div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="form-group">
                   <label className="form-label">Currency</label>
@@ -438,11 +600,22 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                   <input type="date" className="form-input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">VAT (%)</label>
+                  <label className="form-label">VAT / Tax Rate (%)</label>
                   <input
                     type="number" min={0} max={100} step="0.01" className="form-input"
                     value={taxPercent} onChange={(e) => setTaxPercent(parseFloat(e.target.value) || 0)}
                   />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value as any)}>
+                    <option value="DRAFT">Draft</option>
+                    <option value="SENT">Sent</option>
+                    <option value="PARTIALLY_PAID">Partially Paid</option>
+                    <option value="PAID">Paid</option>
+                    <option value="OVERDUE">Overdue</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -458,67 +631,52 @@ export default function InvoiceEditClient({ invoice, clients, profile }: Props) 
                 {/* Overall Discount */}
                 <div style={{ padding: '8px 10px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                   <div className="flex justify-between items-center" style={{ marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>Overall Discount</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>Discount</span>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         className={`btn btn-xs ${discountType === 'PERCENTAGE' ? 'btn-primary' : 'btn-ghost'}`}
                         onClick={() => setDiscountType('PERCENTAGE')}
-                        style={{ padding: '2px 7px', fontSize: 11, minHeight: 22 }}
-                      >
-                        %
-                      </button>
+                      >%</button>
                       <button
                         type="button"
                         className={`btn btn-xs ${discountType === 'FIXED' ? 'btn-primary' : 'btn-ghost'}`}
                         onClick={() => setDiscountType('FIXED')}
-                        style={{ padding: '2px 7px', fontSize: 11, minHeight: 22 }}
-                      >
-                        {currency}
-                      </button>
+                      >{currency}</button>
                     </div>
                   </div>
-                  <input
-                    type="number"
-                    min={0}
-                    max={discountType === 'PERCENTAGE' ? 100 : undefined}
-                    step="0.01"
-                    className="form-input"
-                    placeholder={discountType === 'PERCENTAGE' ? 'Discount %' : `Amount in ${currency}`}
-                    value={discountValue || ''}
-                    onChange={(e) => setDiscountValue(Math.max(0, parseFloat(e.target.value) || 0))}
-                    style={{ fontSize: 12, padding: '4px 8px' }}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min={0} step={discountType === 'PERCENTAGE' ? '1' : '0.01'}
+                      max={discountType === 'PERCENTAGE' ? 100 : subtotal}
+                      className="form-input num" style={{ height: 28, fontSize: 12 }}
+                      placeholder={discountType === 'PERCENTAGE' ? '0%' : '0.00'}
+                      value={discountValue || ''}
+                      onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                    />
+                    {discountAmount > 0 && (
+                      <span className="tabular-nums text-meta" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                        -{currency} {discountAmount.toLocaleString('en', { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {discountAmount > 0 && (
-                  <div className="flex justify-between items-center" style={{ color: 'var(--success)' }}>
-                    <span style={{ fontSize: 13, fontWeight: 500 }}>
-                      Discount {discountType === 'PERCENTAGE' ? `(${discountValue}%)` : ''}
-                    </span>
-                    <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600 }}>
-                      - {currency} {discountAmount.toLocaleString('en', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
-
-                {discountAmount > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taxable Subtotal</span>
-                    <span className="tabular-nums" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                      {currency} {taxableSubtotal.toLocaleString('en', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
+                <div className="flex justify-between">
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Taxable Subtotal</span>
+                  <span className="tabular-nums">{currency} {taxableSubtotal.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
+                </div>
 
                 <div className="flex justify-between">
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>VAT ({taxPercent}%)</span>
                   <span className="tabular-nums">{currency} {taxAmount.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="divider" style={{ margin: '6px 0' }} />
-                <div className="flex justify-between">
-                  <span style={{ fontWeight: 600 }}>Total</span>
-                  <span className="tabular-nums" style={{ fontSize: 18, fontWeight: 700 }}>{currency} {total.toLocaleString('en', { minimumFractionDigits: 2 })}</span>
+
+                <div className="flex justify-between" style={{ borderTop: '2px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
+                  <span className="tabular-nums" style={{ fontSize: 17, fontWeight: 700, color: 'var(--accent)' }}>
+                    {currency} {total.toLocaleString('en', { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
               </div>
             </div>

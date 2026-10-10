@@ -43,6 +43,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invoice ID is required' }, { status: 400 })
     }
 
+    // 1. Check invoice status to enforce ZATCA tamper-resistance
+    const { data: targetInvoice, error: fetchErr } = await serviceClient
+      .from('invoices')
+      .select('id, invoice_number, status, subtotal, tax_amount, total')
+      .eq('id', invoiceId)
+      .single()
+
+    if (fetchErr || !targetInvoice) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+    }
+
+    // Under ZATCA Phase 1 compliance, issued invoices (SENT, PAID, CANCELLED, OVERDUE) cannot be deleted.
+    if (targetInvoice.status !== 'DRAFT') {
+      return NextResponse.json(
+        {
+          error: `ZATCA Compliance: Invoice ${targetInvoice.invoice_number} is officially issued (${targetInvoice.status}) and cannot be deleted. To adjust or cancel an issued invoice, issue a Credit Note instead.`,
+        },
+        { status: 403 }
+      )
+    }
+
     // Delete associated payments and invoice items first
     await serviceClient.from('payments').delete().eq('invoice_id', invoiceId)
     await serviceClient.from('invoice_items').delete().eq('invoice_id', invoiceId)

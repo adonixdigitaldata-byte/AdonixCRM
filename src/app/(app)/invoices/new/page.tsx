@@ -11,7 +11,7 @@ export default async function NewInvoicePage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  const { data: existingClients } = await supabase.from('clients').select('id, name, company, email, phone, address').order('name')
+  const { data: existingClients } = await supabase.from('clients').select('id, name, company, email, phone, address, vat_number, cr_number').order('name')
 
   return (
     <InvoiceBuilderClient

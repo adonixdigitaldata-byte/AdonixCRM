@@ -185,6 +185,8 @@ export interface Client {
   email: string | null
   phone: string | null
   address: string | null
+  vat_number?: string | null // Client 15-digit VAT number (for B2B)
+  cr_number?: string | null // Client CR / Commercial Registration number
   created_at: string
 }
 
@@ -237,6 +239,8 @@ export interface InvoiceItem {
   sort_order: number
 }
 
+export type InvoiceTransactionType = 'B2B' | 'B2C'
+
 export interface Invoice {
   id: string
   invoice_number: string
@@ -244,8 +248,15 @@ export interface Invoice {
   client_id: string
   lead_id: string | null
   status: InvoiceStatus
+  invoice_type?: InvoiceTransactionType | null // B2B (Standard Tax Invoice) or B2C (Simplified)
+  is_credit_note?: boolean
+  is_debit_note?: boolean
+  reference_invoice_id?: string | null
+  reference_invoice_number?: string | null
+  credit_debit_reason?: string | null
   currency: string
   issue_date: string
+  issue_time?: string | null
   due_date: string | null
   subtotal: number
   discount_type?: 'PERCENTAGE' | 'FIXED' | null
@@ -260,10 +271,33 @@ export interface Invoice {
   pdf_url: string | null
   created_by: string | null
   office_location?: 'KSA' | 'HYDERABAD' | null
+  zatca_status?: 'NOT_APPLICABLE' | 'PENDING' | 'CLEARED' | 'REPORTED' | 'REJECTED' | null
+  zatca_hash?: string | null
+  zatca_uuid?: string | null
+  bank_name?: string | null
+  bank_account_name?: string | null
+  bank_account_number?: string | null
+  bank_iban?: string | null
+  bank_swift?: string | null
+  bank_ifsc?: string | null
   created_at: string
   updated_at: string
   client?: Client
   items?: InvoiceItem[]
+}
+
+export interface InvoiceAuditLog {
+  id: string
+  invoice_id: string
+  invoice_number: string
+  action: 'CREATED' | 'STATUS_CHANGED' | 'PAYMENT_RECORDED' | 'CREDIT_NOTE_ISSUED' | 'VIEWED' | 'PRINTED'
+  performed_by?: string | null
+  previous_state?: Json | null
+  new_state?: Json | null
+  ip_address?: string | null
+  user_agent?: string | null
+  created_at: string
+  performer?: Profile
 }
 
 export interface Payment {
