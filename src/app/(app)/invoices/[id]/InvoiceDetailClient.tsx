@@ -541,16 +541,6 @@ export default function InvoiceDetailClient({ invoice: initial, payments: initia
                 </select>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer" style={{ fontSize: 13, color: 'var(--text-secondary)', marginRight: 12, userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={showCr}
-                  onChange={(e) => setShowCr(e.target.checked)}
-                  style={{ cursor: 'pointer' }}
-                />
-                Show CR No.
-              </label>
-
               {/* DRAFT ONLY: Allow Edit and Delete (Standard Invoices Only) */}
               {invoice.status === 'DRAFT' && !invoice.is_credit_note && !invoice.is_debit_note && (
                 <>

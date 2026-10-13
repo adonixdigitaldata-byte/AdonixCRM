@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, ArrowLeft } from 'lucide-react'
 import type { Profile } from '@/types/database'
 import ClientSearchSelect from '@/components/ui/ClientSearchSelect'
+import { OFFICE_LOCATIONS, type OfficeLocationKey } from '@/lib/constants/officeLocations'
 
 interface LineItem {
   id: string
@@ -40,6 +41,36 @@ export default function QuotationBuilderClient({ profile, existingClients, prefi
   const [clientEmail, setClientEmail] = useState(prefillClient?.email ?? '')
   const [clientPhone, setClientPhone] = useState(prefillClient?.phone ?? '')
   const [clientAddress, setClientAddress] = useState('')
+
+  // Office Location & Bank details
+  const [officeLocation, setOfficeLocation] = useState<OfficeLocationKey>('KSA')
+  const defaultBank = OFFICE_LOCATIONS.KSA.bankDetails
+  const [bankName, setBankName] = useState(defaultBank?.bankName ?? '')
+  const [bankAccountName, setBankAccountName] = useState(defaultBank?.accountName ?? '')
+  const [bankAccountNumber, setBankAccountNumber] = useState(defaultBank?.accountNumber ?? '')
+  const [bankIban, setBankIban] = useState(defaultBank?.iban ?? '')
+  const [bankSwift, setBankSwift] = useState(defaultBank?.swiftCode ?? '')
+  const [bankIfsc, setBankIfsc] = useState(defaultBank?.ifscCode ?? '')
+
+  function handleOfficeChange(loc: OfficeLocationKey) {
+    setOfficeLocation(loc)
+    const newBank = OFFICE_LOCATIONS[loc]?.bankDetails
+    if (newBank) {
+      setBankName(newBank.bankName)
+      setBankAccountName(newBank.accountName)
+      setBankAccountNumber(newBank.accountNumber)
+      setBankIban(newBank.iban ?? '')
+      setBankSwift(newBank.swiftCode ?? '')
+      setBankIfsc(newBank.ifscCode ?? '')
+    }
+    if (loc === 'KSA') {
+      setCurrency('SAR')
+      setTaxPercent(15)
+    } else {
+      setCurrency('INR')
+      setTaxPercent(18)
+    }
+  }
 
   // Quote details
   const [currency, setCurrency] = useState('SAR')
@@ -156,6 +187,7 @@ All payments are non-refundable once the corresponding project phase has been co
       .insert({
         quote_number: quoteNumber,
         client_id: clientId,
+        office_location: officeLocation,
         lead_id: leadId,
         currency,
         issue_date: issueDate,
@@ -169,6 +201,12 @@ All payments are non-refundable once the corresponding project phase has been co
         total,
         terms: terms.trim() || null,
         notes: notes.trim() || null,
+        bank_name: bankName.trim() || null,
+        bank_account_name: bankAccountName.trim() || null,
+        bank_account_number: bankAccountNumber.trim() || null,
+        bank_iban: bankIban.trim() || null,
+        bank_swift: bankSwift.trim() || null,
+        bank_ifsc: bankIfsc.trim() || null,
         created_by: profile.id,
       })
       .select('id')
@@ -467,6 +505,79 @@ All payments are non-refundable once the corresponding project phase has been co
                 </div>
               </div>
 
+              {/* Official Bank Remittance Instructions */}
+              <div className="card">
+                <div className="card-header">
+                  <span className="text-section-header">Official Bank Remittance Details</span>
+                </div>
+                <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="rg-2">
+                    <div className="form-group">
+                      <label className="form-label">Bank Name</label>
+                      <input
+                        className="form-input"
+                        value={bankName}
+                        onChange={(e) => setBankName(e.target.value)}
+                        placeholder="e.g. Al Rajhi Bank / HDFC Bank"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Account Holder Name</label>
+                      <input
+                        className="form-input"
+                        value={bankAccountName}
+                        onChange={(e) => setBankAccountName(e.target.value)}
+                        placeholder="Beneficiary legal entity name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rg-2">
+                    <div className="form-group">
+                      <label className="form-label">IBAN Number</label>
+                      <input
+                        className="form-input font-mono"
+                        value={bankIban}
+                        onChange={(e) => setBankIban(e.target.value)}
+                        placeholder="e.g. SA0000000000000000000000"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Account Number</label>
+                      <input
+                        className="form-input font-mono"
+                        value={bankAccountNumber}
+                        onChange={(e) => setBankAccountNumber(e.target.value)}
+                        placeholder="Account Number"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rg-2">
+                    <div className="form-group">
+                      <label className="form-label">SWIFT / BIC Code</label>
+                      <input
+                        className="form-input font-mono"
+                        value={bankSwift}
+                        onChange={(e) => setBankSwift(e.target.value)}
+                        placeholder="e.g. RJHISARI"
+                      />
+                    </div>
+                    {officeLocation === 'HYDERABAD' && (
+                      <div className="form-group">
+                        <label className="form-label">IFSC Code (India)</label>
+                        <input
+                          className="form-input font-mono"
+                          value={bankIfsc}
+                          onChange={(e) => setBankIfsc(e.target.value)}
+                          placeholder="e.g. HDFC0000123"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Terms & Notes */}
               <div className="card">
                 <div className="card-header">
@@ -492,6 +603,17 @@ All payments are non-refundable once the corresponding project phase has been co
                   <span className="text-section-header">Quote details</span>
                 </div>
                 <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="form-group">
+                    <label className="form-label">Billing Office</label>
+                    <select
+                      className="form-select"
+                      value={officeLocation}
+                      onChange={(e) => handleOfficeChange(e.target.value as OfficeLocationKey)}
+                    >
+                      <option value="KSA">🇸🇦 Saudi Arabia (Riyadh &amp; Jeddah)</option>
+                      <option value="HYDERABAD">🇮🇳 India (Hyderabad)</option>
+                    </select>
+                  </div>
                   <div className="form-group">
                     <label className="form-label">Currency</label>
                     <select className="form-select" value={currency} onChange={(e) => setCurrency(e.target.value)}>

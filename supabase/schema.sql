@@ -320,6 +320,14 @@ create table if not exists invoice_items (
 
 alter table invoice_items add column if not exists discount_percent numeric(5,2) default 0;
 
+alter table quotations add column if not exists office_location text default 'KSA' check (office_location in ('KSA', 'HYDERABAD'));
+alter table quotations add column if not exists bank_name text;
+alter table quotations add column if not exists bank_account_name text;
+alter table quotations add column if not exists bank_account_number text;
+alter table quotations add column if not exists bank_iban text;
+alter table quotations add column if not exists bank_swift text;
+alter table quotations add column if not exists bank_ifsc text;
+
 -- ============================================================
 -- 11. PAYMENTS
 -- ============================================================

@@ -222,6 +222,12 @@ export interface Quotation {
   pdf_url: string | null
   created_by: string | null
   office_location?: 'KSA' | 'HYDERABAD' | null
+  bank_name?: string | null
+  bank_account_name?: string | null
+  bank_account_number?: string | null
+  bank_iban?: string | null
+  bank_swift?: string | null
+  bank_ifsc?: string | null
   created_at: string
   updated_at: string
   client?: Client

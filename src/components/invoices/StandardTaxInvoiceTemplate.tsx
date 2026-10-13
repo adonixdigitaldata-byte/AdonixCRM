@@ -85,11 +85,11 @@ export default function StandardTaxInvoiceTemplate({
               <div className="prem-meta-list">
                 <div className="prem-meta-item">
                   <span className="prem-meta-key">CR / 700 No:</span>
-                  <span className="prem-meta-val font-mono">{currentOffice.crNumber ?? '—'}</span>
+                  <span className="prem-meta-val font-mono">{currentOffice.crNumber ?? '7055349166'}</span>
                 </div>
                 <div className="prem-meta-item">
                   <span className="prem-meta-key">VAT / TRN:</span>
-                  <span className="prem-meta-val font-mono">{currentOffice.vatNumber ?? '—'}</span>
+                  <span className="prem-meta-val font-mono">{currentOffice.vatNumber ?? '315081325900003'}</span>
                 </div>
                 <div className="prem-meta-item">
                   <span className="prem-meta-key">National Address:</span>
@@ -125,11 +125,11 @@ export default function StandardTaxInvoiceTemplate({
               <div className="prem-meta-list" dir="rtl">
                 <div className="prem-meta-item" dir="rtl">
                   <span className="prem-meta-key">السجل التجاري / الرقم الموحد:</span>
-                  <span className="prem-meta-val font-mono">{currentOffice.crNumber ?? '—'}</span>
+                  <span className="prem-meta-val font-mono">{currentOffice.crNumber ?? '7055349166'}</span>
                 </div>
                 <div className="prem-meta-item" dir="rtl">
                   <span className="prem-meta-key">الرقم الضريبي:</span>
-                  <span className="prem-meta-val font-mono">{currentOffice.vatNumber ?? '—'}</span>
+                  <span className="prem-meta-val font-mono">{currentOffice.vatNumber ?? '315081325900003'}</span>
                 </div>
                 <div className="prem-meta-item" dir="rtl">
                   <span className="prem-meta-key">العنوان الوطني:</span>
@@ -263,7 +263,7 @@ export default function StandardTaxInvoiceTemplate({
               {isKsa && currentOffice.crNumber && (
                 <div className="prem-party-row">
                   <span className="prem-party-label">CR / Reg No</span>
-                  <span className="prem-party-data font-mono">{currentOffice.crNumber}</span>
+                  <span className="prem-party-data font-mono font-bold">{currentOffice.crNumber}</span>
                 </div>
               )}
 

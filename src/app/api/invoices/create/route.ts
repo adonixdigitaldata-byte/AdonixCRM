@@ -71,6 +71,7 @@ export async function POST(req: Request) {
       referenceInvoiceId,
       referenceInvoiceNumber,
       creditDebitReason,
+      quotationId,
     } = body
 
     if (!clientId) {
@@ -108,6 +109,7 @@ export async function POST(req: Request) {
       .insert({
         invoice_number: invoiceNumber,
         invoice_counter_value: nextCounter,
+        quotation_id: quotationId || null,
         client_id: clientId,
         office_location: officeLocation || 'KSA',
         invoice_type: officeLocation === 'HYDERABAD' ? null : (invoiceType || 'B2B'),

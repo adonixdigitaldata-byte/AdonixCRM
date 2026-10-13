@@ -23,6 +23,7 @@ export interface OfficeLocationInfo {
   email?: string
   crNumber?: string | null
   vatNumber?: string | null // 15-digit Tax Registration Number (ZATCA TRN)
+  tinNumber?: string | null // 10-digit Tax Identification Number (ZATCA TIN)
   national700Number?: string | null
   zatcaRequired: boolean
   bankDetails?: BankAccountDetails
@@ -40,9 +41,10 @@ export const OFFICE_LOCATIONS: Record<OfficeLocationKey, OfficeLocationInfo> = {
     mapUrl: 'https://maps.app.goo.gl/vbcPiZJTmJ1hvqbv9',
     phone: '+966 53 849 8580',
     email: 'contact@adonixdigital.com',
-    crNumber: '7055349166', // National Unified Number (700) / Commercial Registration
+    crNumber: '7055349166', // Official Commercial Registration / National Unified Number (Ministry of Commerce)
     vatNumber: '315081325900003', // Official 15-digit ZATCA VAT Registration Number
-    national700Number: '7055349166',
+    tinNumber: '3150813259', // Official 10-digit Tax Identification Number (TIN)
+    national700Number: '7055349166', // National Unified Number (700)
     zatcaRequired: true,
     bankDetails: {
       bankName: 'Al Rajhi Bank / مصرف الراجحي',
