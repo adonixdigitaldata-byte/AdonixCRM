@@ -404,6 +404,9 @@ export default function StandardContractTemplate({
                     <strong>Billing Cycle:</strong> {contract.billing_cycle || 'Monthly'}<br />
                     <strong>Payment Terms:</strong> {contract.payment_terms || 'Payment via direct bank transfer upon issuance of tax invoice.'}
                   </div>
+                  <div style={{ marginTop: 6, fontSize: 10, color: '#6b21a8', borderTop: '1px dashed #d8b4fe', paddingTop: 4, lineHeight: 1.45 }}>
+                    <strong>Additional Costs &amp; Ad Spend:</strong> The agreed contract value strictly covers the professional services defined in Clause 1. Any additional external costs—including third-party advertising spend (paid ad budgets on Meta/Google/TikTok), governmental/regulatory fees, specialized third-party licenses, domain/hosting charges, or out-of-scope requests—are not included and shall be borne separately by the Second Party subject to prior approval.
+                  </div>
                 </div>
               </div>
 
@@ -419,6 +422,9 @@ export default function StandardContractTemplate({
                     <strong>دورية الفوترة:</strong> {contract.billing_cycle === 'MONTHLY' ? 'شهري' : contract.billing_cycle === 'ANNUAL' ? 'سنوي' : 'حسب الدفعات'}<br />
                     <strong>آلية السداد:</strong> {contract.payment_terms_ar || contract.payment_terms || 'يتم السداد بموجب تحويل بنكي رسمي عند صدور الفاتورة الضريبية.'}
                   </div>
+                  <div style={{ marginTop: 6, fontSize: 10, color: '#6b21a8', borderTop: '1px dashed #d8b4fe', paddingTop: 4, lineHeight: 1.45 }}>
+                    <strong>المصروفات الإضافية وميزانيات الإعلانات:</strong> يقتصر المقابل المالي المحدد على أتعاب الخدمات المهنية المبينة في البند الأول حصراً. ولا تشمل القيمة أي تكاليف خارجية إضافية—بما في ذلك ميزانيات الحملات الإعلانية الممولة (Ad Spend عبر ميتا وجوجل وتيك توك)، أو الرسوم الحكومية، أو تراخيص البرمجيات الخارجية، أو استضافة النطاقات، أو أي خدمات خارج النطاق؛ وتتحملها المنشأة الطرف الثاني بشكل مستقل ومباشر بموجب موافقة مسبقة.
+                  </div>
                 </div>
               </div>
             </div>
@@ -432,9 +438,10 @@ export default function StandardContractTemplate({
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4, textTransform: 'uppercase' }}>
                   Clause 4: Mutual Obligations &amp; Delivery Standards
                 </div>
-                <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.5 }}>
-                  • <strong>First Party:</strong> Deploys qualified personnel, maintains professional industry standards, delivers regular operational reports, and ensures confidentiality.<br />
-                  • <strong>Second Party:</strong> Supplies brand assets, product data, required administrative access, and feedback within three (3) business days, and ensures timely financial settlement.
+                <div style={{ fontSize: 10.5, color: '#334155', lineHeight: 1.45 }}>
+                  • <strong>First Party:</strong> Deploys qualified personnel, maintains professional industry standards, delivers regular operational reports, and ensures strict confidentiality.<br />
+                  • <strong>Second Party:</strong> Supplies brand assets, product data, required administrative access, and feedback within three (3) business days, and ensures timely financial settlement.<br />
+                  • <strong>Client Delays &amp; Project Timelines:</strong> Any delay or inaction by the Second Party in delivering necessary materials, brand assets, technical access, or written approvals beyond the agreed timeframes shall automatically extend the project delivery schedule, launch dates, and operational milestones by a duration equivalent to such delay, without liability or penalty on the First Party.
                 </div>
               </div>
 
@@ -443,9 +450,10 @@ export default function StandardContractTemplate({
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>
                   البند الرابع: التزامات وحقوق الطرفين
                 </div>
-                <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.5 }}>
+                <div style={{ fontSize: 10.5, color: '#334155', lineHeight: 1.45 }}>
                   • <strong>الطرف الأول:</strong> توفير الكوادر المتخصصة، والالتزام بالمعايير المهنية، وتقديم التقارير الدورية عن سير العمل، وحماية سرية بيانات العميل.<br />
-                  • <strong>الطرف الثاني:</strong> تزويد الطرف الأول بكافة البيانات والصلاحيات والمواد التسويقية خلال ثلاثة (٣) أيام عمل، والالتزام بمواعيد السداد المعتمدة.
+                  • <strong>الطرف الثاني:</strong> تزويد الطرف الأول بكافة البيانات والصلاحيات والمواد التسويقية خلال ثلاثة (٣) أيام عمل، والالتزام بمواعيد السداد المعتمدة.<br />
+                  • <strong>تأخر العميل وأثره على الجدول الزمني:</strong> أي تأخير أو تراخٍ من قِبل الطرف الثاني في توفير البيانات أو المواد أو الصلاحيات الفنية أو الاعتمادات المطلوبة عن المواعيد المحددة يترتب عليه تلقائياً تمديد الجدول الزمني لتنفيذ المشروع ومراحله بما يعادل مدة التأخير، دون أدنى مسؤولية أو التزام بتعويض على الطرف الأول.
                 </div>
               </div>
             </div>
@@ -482,20 +490,20 @@ export default function StandardContractTemplate({
               {/* English */}
               <div>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4, textTransform: 'uppercase' }}>
-                  Clause 6: Termination &amp; Default
+                  Clause 6: Termination &amp; Settlement Process
                 </div>
-                <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.5 }}>
-                  Either party may terminate this Agreement by giving thirty (30) days advance written notice. Upon termination, the Second Party shall immediately settle all fees for services executed up to the effective cancellation date.
+                <div style={{ fontSize: 10.5, color: '#334155', lineHeight: 1.45 }}>
+                  Either party may terminate this Agreement by giving thirty (30) days advance written notice. <strong>Settlement Process:</strong> Upon notice of termination, the First Party shall prepare a comprehensive final statement of account within seven (7) business days detailing all executed services, deliverables, and accrued work up to the effective termination date. The Second Party shall fully settle all outstanding and accrued amounts within fourteen (14) calendar days of receiving the statement, whereupon all completed work products to date shall be formally delivered.
                 </div>
               </div>
 
               {/* Arabic */}
               <div dir="rtl" style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>
-                  البند السادس: فسخ العقد والتسوية
+                  البند السادس: فسخ العقد وآلية التسوية المالية
                 </div>
-                <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.5 }}>
-                  يجوز لأي من الطرفين إنهاء العقد بإخطار كتابي مسبق مدته ثلاثون (٣٠) يوماً. ويلتزم الطرف الثاني عند الإنهاء بالسداد الفوري لقيمة كافة الخدمات والأعمال المنجزة حتى تاريخ سريان الإنهاء.
+                <div style={{ fontSize: 10.5, color: '#334155', lineHeight: 1.45 }}>
+                  يجوز لأي من الطرفين إنهاء هذا العقد بإخطار كتابي مسبق مدته ثلاثون (٣٠) يوماً. <strong>آلية التسوية المالية:</strong> فور تقديم إخطار الإنهاء، يُعد الطرف الأول كشف حساب ختامي مفصل خلال سبعة (٧) أيام عمل يوضح كافة الخدمات والمخرجات المنجزة والأتعاب المستحقة حتى تاريخ سريان الإنهاء. ويلتزم الطرف الثاني بتسوية وسداد كامل المستحقات القائمة خلال أربعة عشر (١٤) يوماً من تاريخ استلام كشف الحساب، وتُسلّم كافة المواد والأعمال المنجزة للطرف الثاني فور إتمام السداد والمخالصة النهائية.
                 </div>
               </div>
             </div>
