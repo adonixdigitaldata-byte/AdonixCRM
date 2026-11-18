@@ -32,7 +32,16 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Public routes that don't need auth
-  const publicRoutes = ['/login', '/reset-password', '/auth/callback', '/api/webhooks', '/api/cron', '/api/agents/invite']
+  const publicRoutes = [
+    '/login',
+    '/reset-password',
+    '/auth/callback',
+    '/api/webhooks',
+    '/api/cron',
+    '/api/agents/invite',
+    '/contracts/view',
+    '/api/contracts',
+  ]
   const isPublic = publicRoutes.some((r) => pathname.startsWith(r))
 
   if (!user && !isPublic) {
@@ -60,7 +69,8 @@ export async function proxy(request: NextRequest) {
       pathname.startsWith('/api') ||
       pathname.startsWith('/auth') ||
       (pathname.startsWith('/quotations/') && pathname !== '/quotations') ||
-      (pathname.startsWith('/invoices/') && pathname !== '/invoices')
+      (pathname.startsWith('/invoices/') && pathname !== '/invoices') ||
+      pathname.startsWith('/contracts/view')
 
     if (!isAllowedClientRoute) {
       const url = request.nextUrl.clone()

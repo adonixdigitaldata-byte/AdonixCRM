@@ -22,6 +22,7 @@ import {
   Send,
   Share2,
   Banknote,
+  FileSignature,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -42,6 +43,7 @@ const adminNav = [
   {
     section: 'Finance & Clients',
     items: [
+      { href: '/contracts', label: 'Contracts', icon: FileSignature },
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
       { href: '/clients', label: 'Clients', icon: Building2 },
@@ -71,6 +73,7 @@ const accountManagerNav = [
   {
     section: 'Finance & Clients',
     items: [
+      { href: '/contracts', label: 'Contracts', icon: FileSignature },
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
       { href: '/clients', label: 'Clients', icon: Building2 },
@@ -93,6 +96,7 @@ const agentNav = [
   {
     section: 'Finance & Clients',
     items: [
+      { href: '/contracts', label: 'Contracts', icon: FileSignature },
       { href: '/quotations', label: 'Quotations', icon: FileText },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
       { href: '/clients', label: 'Clients', icon: Building2 },
@@ -117,6 +121,7 @@ const clientNav = [
     section: 'Client Portal',
     items: [
       { href: '/portal?section=overview', label: 'Overview', icon: LayoutDashboard },
+      { href: '/portal?section=contracts', label: 'Contracts & Agreements', icon: FileSignature },
       { href: '/portal?section=finance', label: 'Invoices & Quotes', icon: Receipt },
       { href: '/portal?section=reports', label: 'Reports', icon: FileText },
       { href: '/portal?section=tasks', label: 'Deliverables & Tasks', icon: CheckSquare },

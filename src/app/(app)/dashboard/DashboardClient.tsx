@@ -1597,7 +1597,7 @@ export default function DashboardClient({
                 <span style={{ padding: 6, borderRadius: 6, background: '#EFF6FF', color: 'var(--accent)' }}><FileText size={16} /></span>
               </div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#0F172A' }}>
-                SAR {totalInvoicedSAR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                SAR {totalInvoicedSAR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, display: 'block' }}>Total billed to clients</span>
             </div>
@@ -1608,7 +1608,7 @@ export default function DashboardClient({
                 <span style={{ padding: 6, borderRadius: 6, background: 'var(--success-light)', color: 'var(--success)' }}><CreditCard size={16} /></span>
               </div>
               <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--success)' }}>
-                SAR {totalEarnedSAR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                SAR {totalEarnedSAR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, display: 'block' }}>Collections received</span>
             </div>
@@ -1619,7 +1619,7 @@ export default function DashboardClient({
                 <span style={{ padding: 6, borderRadius: 6, background: outstandingSAR > 0 ? '#FEF2F2' : '#F1F5F9', color: outstandingSAR > 0 ? '#DC2626' : '#64748B' }}><Clock size={16} /></span>
               </div>
               <div style={{ fontSize: 24, fontWeight: 800, color: outstandingSAR > 0 ? '#DC2626' : '#0F172A' }}>
-                SAR {outstandingSAR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                SAR {outstandingSAR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, display: 'block' }}>Unpaid invoice balances</span>
             </div>
@@ -1630,7 +1630,7 @@ export default function DashboardClient({
                 <span style={{ padding: 6, borderRadius: 6, background: '#FEF3C7', color: '#D97706' }}><SaudiRiyalIcon size={16} /></span>
               </div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#D97706' }}>
-                SAR {pipelineQuotationsSAR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                SAR {pipelineQuotationsSAR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, display: 'block' }}>Active pending proposals</span>
             </div>

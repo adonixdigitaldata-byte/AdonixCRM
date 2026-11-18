@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
+import { getContractsByClientId } from '@/lib/contracts/contractStore'
 import ClientPortalClient from './ClientPortalClient'
 
 export const metadata: Metadata = { title: 'Client Portal — Adonix' }
@@ -130,12 +131,16 @@ export default async function ClientPortalPage({ searchParams }: PageProps) {
     payments = payData || []
   }
 
+  // Fetch contracts for this client
+  const contracts = await getContractsByClientId(clientId, client.email)
+
   return (
     <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading Client Portal...</div>}>
       <ClientPortalClient
         client={client}
         quotations={quotations ?? []}
         invoices={invoices ?? []}
+        contracts={contracts ?? []}
         payments={payments}
         tasks={clientTasks ?? []}
         assignedAgent={assignedAgent}

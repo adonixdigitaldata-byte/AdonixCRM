@@ -540,3 +540,108 @@ export async function sendClientMessageNotificationEmail({
     console.error('Failed to send client message notification email:', error)
   }
 }
+
+export async function sendContractShareEmail({
+  clientEmail,
+  clientName,
+  contractNumber,
+  serviceTitle,
+  termDuration,
+  contractPrice,
+  currency,
+  contractUrl,
+}: {
+  clientEmail: string
+  clientName: string
+  contractNumber: string
+  serviceTitle: string
+  termDuration: string
+  contractPrice: number
+  currency: string
+  contractUrl: string
+}) {
+  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.includes('YOUR_')) {
+    console.log(`[Email Mock] Contract ${contractNumber} link for ${clientEmail}: ${contractUrl}`)
+    return
+  }
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Adonix <info@adonixdigital.com>'
+  const subject = `Service Agreement & Contract (${contractNumber}) — Adonix Developments`
+
+  try {
+    await resend.emails.send({
+      from: fromEmail,
+      to: clientEmail,
+      subject,
+      html: `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+            .header { border-bottom: 2px solid #4f46e5; padding-bottom: 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+            .badge { background: #e0e7ff; color: #4338ca; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; }
+            .field-table { width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 8px; overflow: hidden; }
+            .field-table td { padding: 10px 14px; font-size: 14px; border-bottom: 1px solid #e2e8f0; }
+            .btn { background: #4f46e5; color: #ffffff !important; font-weight: 600; text-decoration: none; padding: 14px 28px; border-radius: 8px; display: inline-block; font-size: 15px; }
+            .ar-box { direction: rtl; text-align: right; background: #fdfefe; border-right: 4px solid #4f46e5; padding: 14px; margin: 18px 0; font-size: 14px; color: #334155; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <h2 style="margin: 0; color: #0f172a; font-size: 22px;">Adonix Developments</h2>
+              <span class="badge">${contractNumber}</span>
+            </div>
+
+            <p style="font-size: 15px; line-height: 1.6; margin-top: 0;">
+              Dear <strong>${clientName}</strong>,
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              We are pleased to present your official Service Agreement with <strong>Asaheeb and Adonix Developments Company</strong>. Please find the agreement summary below and click the button to review the complete bilingual agreement and confirm your digital acceptance.
+            </p>
+
+            <table class="field-table">
+              <tr>
+                <td style="color: #64748b; width: 35%;"><strong>Contract Ref:</strong></td>
+                <td style="color: #0f172a; font-weight: 600;">${contractNumber}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b;"><strong>Service Scope:</strong></td>
+                <td style="color: #0f172a;">${serviceTitle}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b;"><strong>Contract Term:</strong></td>
+                <td style="color: #0f172a; font-weight: 600;">${termDuration}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b;"><strong>Total Value:</strong></td>
+                <td style="color: #059669; font-weight: 700; font-size: 15px;">${contractPrice.toLocaleString()} ${currency}</td>
+              </tr>
+            </table>
+
+            <div class="ar-box">
+              <strong>عزيزنا العميل / ${clientName} المحترم،</strong><br/>
+              يسرنا تقديم عقد تقديم الخدمات المعتمد مع <strong>شركة اساهيب وادونيكس للتطوير</strong>. نأمل منكم التكرم بالاطلاع على مسودة العقد باللغتين العربية والإنجليزية والموافقة الإلكترونية عبر الرابط أدناه.
+            </div>
+
+            <div style="text-align: center; margin: 28px 0;">
+              <a href="${contractUrl}" class="btn">
+                Review &amp; Sign Contract Online (عرض وتوقيع العقد)
+              </a>
+            </div>
+
+            <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-bottom: 0;">
+              Asaheeb and Adonix Developments Company · CR: 7055349166 · Riyadh, Saudi Arabia
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    })
+  } catch (err) {
+    console.error('Error sending contract email via Resend:', err)
+  }
+}

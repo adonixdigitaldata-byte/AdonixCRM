@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import { getContractsByClientId } from '@/lib/contracts/contractStore'
 import ClientDetailClient from './ClientDetailClient'
 
 export const metadata: Metadata = { title: 'Client Profile' }
@@ -63,6 +64,9 @@ export default async function ClientDetailPage({ params }: PageProps) {
     .eq('client_id', id)
     .order('created_at', { ascending: false })
 
+  // Fetch all contracts for this client
+  const contracts = await getContractsByClientId(id)
+
   // Fetch current user's profile
   const { data: profile } = await supabase
     .from('profiles')
@@ -77,6 +81,7 @@ export default async function ClientDetailPage({ params }: PageProps) {
       tasks={clientTasks ?? []}
       invoices={invoices ?? []}
       quotations={quotations ?? []}
+      contracts={contracts ?? []}
       currentProfile={profile}
     />
   )

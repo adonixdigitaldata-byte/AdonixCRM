@@ -17,6 +17,7 @@ export type TaskUpdateType = 'PROGRESS_NOTE' | 'STATUS_CHANGE' | 'LINK_ADDED' | 
 export type LeadSource = 'META_ADS' | 'TIKTOK' | 'SNAPCHAT' | 'WHATSAPP' | 'MANUAL' | 'XLSX_IMPORT' | 'COLD_OUTREACH'
 export type QuotationStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'
 export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'CANCELLED'
+export type ContractStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'ACTIVE' | 'EXPIRED' | 'TERMINATED'
 export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CHEQUE' | 'UPI' | 'WIRE' | 'OTHER'
 export type ActivityType =
   | 'LEAD_CREATED'
@@ -421,6 +422,49 @@ export interface Payslip {
   updated_at: string
   // Joins
   employee?: Profile
+  creator?: Profile
+}
+
+export interface Contract {
+  id: string
+  contract_number: string
+  client_id?: string | null
+  quotation_id?: string | null
+  client_name: string
+  client_company?: string | null
+  client_email?: string | null
+  client_phone?: string | null
+  client_address?: string | null
+  client_cr?: string | null
+  client_vat?: string | null
+  client_representative?: string | null
+  service_title: string
+  service_title_ar: string
+  service_scope: string
+  service_scope_ar: string
+  contract_price: number
+  currency: string
+  tax_percent: number
+  tax_amount: number
+  total_with_tax: number
+  billing_cycle: string
+  payment_terms?: string | null
+  payment_terms_ar?: string | null
+  term_duration: string
+  term_duration_ar: string
+  start_date: string
+  end_date?: string | null
+  office_location?: 'KSA' | 'HYDERABAD' | null
+  status: ContractStatus
+  signed_at?: string | null
+  signed_by_name?: string | null
+  signature_notes?: string | null
+  notes?: string | null
+  created_by?: string | null
+  created_at: string
+  updated_at: string
+  // Joins
+  client?: Client
   creator?: Profile
 }
 

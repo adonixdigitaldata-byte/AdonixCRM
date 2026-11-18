@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
-import { ArrowLeft, FileText, Send, CheckCircle, Printer, Edit2, Trash2, AlertTriangle, X } from 'lucide-react'
+import { ArrowLeft, FileText, Send, CheckCircle, Printer, Edit2, Trash2, AlertTriangle, X, FileSignature } from 'lucide-react'
 import type { Quotation, Profile, QuotationStatus } from '@/types/database'
 import Link from 'next/link'
 
@@ -220,6 +220,14 @@ export default function QuotationDetailClient({ quotation: initial, profile }: P
             <Printer size={14} />
             Print / PDF
           </button>
+          <Link
+            href={`/contracts/new?quotationId=${quotation.id}`}
+            className="btn btn-outline btn-sm"
+            style={{ borderColor: '#6366f1', color: '#4f46e5' }}
+          >
+            <FileSignature size={14} />
+            Create Contract
+          </Link>
           {quotation.status === 'ACCEPTED' && (
             <button className="btn btn-primary btn-sm" onClick={convertToInvoice} disabled={updating}>
               <FileText size={14} />

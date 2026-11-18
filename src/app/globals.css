@@ -3325,4 +3325,75 @@ textarea.form-input {
   .prem-bottom-bar {
     page-break-inside: avoid;
   }
+
+  /* ============================================================
+     BILINGUAL CONTRACT PRINT ARCHITECTURE (CRISP 2-PAGE LAYOUT)
+     ============================================================ */
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  .prem-contract-wrapper {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .prem-contract-sheet {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    font-size: 8.5pt !important;
+    line-height: 1.38 !important;
+  }
+
+  .prem-contract-page-1 {
+    page-break-after: always !important;
+    break-after: page !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    min-height: 96vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .prem-contract-page-2 {
+    page-break-before: always !important;
+    break-before: page !important;
+    padding-top: 2mm !important;
+    margin-top: 0 !important;
+    min-height: 96vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .prem-contract-clause {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 10px !important;
+    padding-top: 8px !important;
+  }
+
+  .prem-contract-banner {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .prem-contract-banner * {
+    color: #ffffff !important;
+  }
+
+  .prem-contract-seal-box {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
 }

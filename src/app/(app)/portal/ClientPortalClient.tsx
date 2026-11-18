@@ -37,12 +37,14 @@ import {
   Mail,
   Clock,
   UserCheck,
+  FileSignature,
 } from 'lucide-react'
 
 interface Props {
   client: any
   quotations: any[]
   invoices: any[]
+  contracts?: any[]
   payments: any[]
   tasks: any[]
   assignedAgent: any
@@ -50,7 +52,7 @@ interface Props {
   isPreview?: boolean
 }
 
-type TabType = 'overview' | 'finance' | 'reports' | 'tasks' | 'company' | 'support'
+type TabType = 'overview' | 'contracts' | 'finance' | 'reports' | 'tasks' | 'company' | 'support'
 
 function ensureExternalUrl(rawUrl?: string): string {
   if (!rawUrl) return '#'
@@ -139,6 +141,7 @@ export default function ClientPortalClient({
   client,
   quotations,
   invoices,
+  contracts = [],
   payments,
   tasks,
   assignedAgent,
@@ -158,7 +161,7 @@ export default function ClientPortalClient({
 
   // Read section reactively from URL query params (defaults to overview)
   const sectionParam = (searchParams.get('section') as TabType) || 'overview'
-  const activeTab: TabType = ['overview', 'finance', 'reports', 'tasks', 'company', 'support'].includes(sectionParam)
+  const activeTab: TabType = ['overview', 'contracts', 'finance', 'reports', 'tasks', 'company', 'support'].includes(sectionParam)
     ? sectionParam
     : 'overview'
 
@@ -531,6 +534,93 @@ export default function ClientPortalClient({
               </div>
             </div>
 
+            {/* Contracts & Legal Agreements Overview Card */}
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileSignature size={18} style={{ color: 'var(--accent)' }} />
+                  <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                    Official Contracts &amp; Service Agreements
+                  </h2>
+                  <span className="badge badge-default" style={{ fontSize: 11 }}>
+                    {contracts.length}
+                  </span>
+                </div>
+                {contracts.length > 0 && (
+                  <button
+                    onClick={() => navigate('contracts')}
+                    className="btn btn-ghost btn-xs"
+                    style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}
+                  >
+                    View all contracts →
+                  </button>
+                )}
+              </div>
+
+              {contracts.length === 0 ? (
+                <div style={{ padding: '16px 0', color: 'var(--text-secondary)', fontSize: 13 }}>
+                  No active contracts on file for this account.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+                  {contracts.slice(0, 3).map((c: any) => (
+                    <div
+                      key={c.id}
+                      style={{
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius)',
+                        padding: '14px 16px',
+                        background: 'var(--surface)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12.5, color: 'var(--accent)' }}>
+                            {c.contract_number}
+                          </span>
+                          <span
+                            className={`badge ${
+                              c.status === 'SIGNED' || c.status === 'ACTIVE'
+                                ? 'badge-success'
+                                : c.status === 'SENT'
+                                ? 'badge-info'
+                                : 'badge-default'
+                            }`}
+                            style={{ fontSize: 11 }}
+                          >
+                            {c.status}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                          {c.service_title}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          Duration: <strong>{c.term_duration}</strong> · Total: <strong>{(c.total_with_tax || c.contract_price || 0).toLocaleString()} {c.currency}</strong>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Link
+                          href={`/contracts/view/${c.id}?from=portal`}
+                          className={`btn btn-sm ${
+                            c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'btn-outline' : 'btn-primary'
+                          }`}
+                          style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          <Eye size={13} />
+                          {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign'}
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Quick Access Shortcuts & Recent Deliverables */}
             <div
               style={{
@@ -720,9 +810,252 @@ export default function ClientPortalClient({
           </div>
         )}
 
+        {/* DEDICATED CONTRACTS & AGREEMENTS TAB */}
+        {activeTab === 'contracts' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div className="card">
+              <div
+                className="card-header flex items-center justify-between"
+                style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <FileSignature size={20} color="var(--accent)" />
+                  <div>
+                    <h2 className="text-section-header" style={{ margin: 0 }}>
+                      Official Contracts &amp; Service Agreements
+                    </h2>
+                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      Bilingual (English &amp; Arabic) executive agreements governing services, retainers, and deliverables.
+                    </p>
+                  </div>
+                </div>
+                <span className="badge badge-default" style={{ fontSize: 12, padding: '4px 10px' }}>
+                  {contracts.length} Agreement{contracts.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              <div className="card-body" style={{ padding: 0 }}>
+                {contracts.length === 0 ? (
+                  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    <FileSignature size={36} style={{ color: 'var(--text-tertiary)', margin: '0 auto 12px auto' }} />
+                    <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>
+                      No contracts issued yet
+                    </p>
+                    <p style={{ fontSize: 12.5, margin: 0 }}>
+                      When your account manager creates a formal agreement, it will appear here for review and digital signature.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop Table */}
+                    <div className="table-wrapper portal-desktop-table" style={{ border: 'none' }}>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Contract Ref</th>
+                            <th>Service &amp; Scope</th>
+                            <th>Term / Duration</th>
+                            <th className="num">Total Value</th>
+                            <th>Status</th>
+                            <th style={{ width: 160, textAlign: 'right' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {contracts.map((c: any) => (
+                            <tr key={c.id}>
+                              <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                                <Link
+                                  href={`/contracts/view/${c.id}?from=portal`}
+                                  style={{ color: 'var(--accent)', textDecoration: 'none' }}
+                                >
+                                  {c.contract_number}
+                                </Link>
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {c.service_title}
+                                </div>
+                                {c.service_title_ar && (
+                                  <div dir="rtl" style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                    {c.service_title_ar}
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 600 }}>{c.term_duration}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                  {c.start_date} {c.end_date ? `→ ${c.end_date}` : ''}
+                                </div>
+                              </td>
+                              <td className="num" style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                {(c.total_with_tax || c.contract_price || 0).toLocaleString()} {c.currency}
+                              </td>
+                              <td>
+                                <span
+                                  className={`badge ${
+                                    c.status === 'SIGNED' || c.status === 'ACTIVE'
+                                      ? 'badge-success'
+                                      : c.status === 'SENT'
+                                      ? 'badge-info'
+                                      : 'badge-default'
+                                  }`}
+                                  style={{ fontSize: 11 }}
+                                >
+                                  {c.status}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                <Link
+                                  href={`/contracts/view/${c.id}?from=portal`}
+                                  className={`btn btn-sm ${
+                                    c.status === 'SIGNED' || c.status === 'ACTIVE'
+                                      ? 'btn-outline'
+                                      : 'btn-primary'
+                                  }`}
+                                  style={{ fontSize: 12, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                                >
+                                  <Eye size={13} />
+                                  {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign'}
+                                </Link>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="portal-mobile-cards" style={{ display: 'none', padding: 16 }}>
+                      {contracts.map((c: any) => (
+                        <div
+                          key={c.id}
+                          style={{
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius)',
+                            padding: 16,
+                            marginBottom: 12,
+                            background: 'var(--surface)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)' }}>
+                              {c.contract_number}
+                            </span>
+                            <span
+                              className={`badge ${
+                                c.status === 'SIGNED' || c.status === 'ACTIVE'
+                                  ? 'badge-success'
+                                  : c.status === 'SENT'
+                                  ? 'badge-info'
+                                  : 'badge-default'
+                              }`}
+                            >
+                              {c.status}
+                            </span>
+                          </div>
+                          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                            {c.service_title}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                            Duration: {c.term_duration} · Total: {(c.total_with_tax || c.contract_price || 0).toLocaleString()} {c.currency}
+                          </div>
+                          <Link
+                            href={`/contracts/view/${c.id}?from=portal`}
+                            className={`btn btn-sm ${
+                              c.status === 'SIGNED' || c.status === 'ACTIVE'
+                                ? 'btn-outline'
+                                : 'btn-primary'
+                            }`}
+                            style={{ width: '100%', justifyContent: 'center' }}
+                          >
+                            {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign Contract'}
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* QUOTATIONS & INVOICES TAB */}
         {activeTab === 'finance' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Contracts List Card */}
+            <div className="card">
+              <div className="card-header flex items-center justify-between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileSignature size={16} color="var(--accent)" />
+                  <span className="text-section-header">Contracts &amp; Agreements ({contracts.length})</span>
+                </div>
+              </div>
+
+              <div className="card-body" style={{ padding: 0 }}>
+                {contracts.length === 0 ? (
+                  <p style={{ padding: 24, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    No contracts generated yet for your account.
+                  </p>
+                ) : (
+                  <div className="table-wrapper portal-desktop-table" style={{ border: 'none' }}>
+                    <table className="table table-compact">
+                      <thead>
+                        <tr>
+                          <th>Contract Ref</th>
+                          <th>Service Scope</th>
+                          <th>Term / Duration</th>
+                          <th className="num">Total Value</th>
+                          <th>Status</th>
+                          <th style={{ width: 140, textAlign: 'right' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contracts.map((c: any) => (
+                          <tr key={c.id}>
+                            <td style={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                              <Link href={`/contracts/view/${c.id}?from=portal`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                                {c.contract_number}
+                              </Link>
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 500 }}>{c.service_title}</div>
+                              <div dir="rtl" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{c.service_title_ar}</div>
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 600 }}>{c.term_duration}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{c.start_date} {c.end_date ? `→ ${c.end_date}` : ''}</div>
+                            </td>
+                            <td className="num" style={{ fontWeight: 700 }}>
+                              {(c.total_with_tax || c.contract_price || 0).toLocaleString()} {c.currency}
+                            </td>
+                            <td>
+                              <span className={`badge ${c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'badge-success' : c.status === 'SENT' ? 'badge-info' : 'badge-default'}`}>
+                                {c.status}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <Link
+                                href={`/contracts/view/${c.id}?from=portal`}
+                                className={`btn btn-sm ${
+                                  c.status === 'SIGNED' || c.status === 'ACTIVE'
+                                    ? 'btn-outline'
+                                    : 'btn-primary'
+                                }`}
+                                style={{ fontSize: 12, padding: '4px 8px' }}
+                              >
+                                {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign'}
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Invoices List Card */}
             <div className="card">
               <div className="card-header flex items-center justify-between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
@@ -1947,6 +2280,13 @@ export default function ClientPortalClient({
         >
           <LayoutDashboard size={18} />
           <span>Overview</span>
+        </button>
+        <button
+          onClick={() => navigate('contracts')}
+          className={`bottom-nav-item ${activeTab === 'contracts' ? 'active' : ''}`}
+        >
+          <FileSignature size={18} />
+          <span>Contracts</span>
         </button>
         <button
           onClick={() => navigate('finance')}

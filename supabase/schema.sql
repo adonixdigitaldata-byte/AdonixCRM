@@ -823,3 +823,63 @@ create policy "Users view own salary history" on employee_salary_history
 
 -- Add individual user security PIN for Payroll Vault
 alter table profiles add column if not exists payroll_pin text default '1234';
+
+-- ============================================================
+-- 19. CONTRACTS & BILINGUAL AGREEMENTS
+-- ============================================================
+create sequence if not exists contract_number_seq start 1001;
+
+create table if not exists contracts (
+  id uuid primary key default gen_random_uuid(),
+  contract_number text unique not null,
+  client_id uuid references clients(id) on delete set null,
+  quotation_id uuid references quotations(id) on delete set null,
+  client_name text not null,
+  client_company text,
+  client_email text,
+  client_phone text,
+  client_address text,
+  client_cr text,
+  client_vat text,
+  client_representative text,
+  service_title text not null,
+  service_title_ar text not null,
+  service_scope text not null,
+  service_scope_ar text not null,
+  contract_price numeric(12,2) not null default 0,
+  currency text not null default 'SAR',
+  tax_percent numeric(5,2) not null default 15.00,
+  tax_amount numeric(12,2) not null default 0,
+  total_with_tax numeric(12,2) not null default 0,
+  billing_cycle text not null default 'MONTHLY',
+  payment_terms text,
+  payment_terms_ar text,
+  term_duration text not null default '1 Year',
+  term_duration_ar text not null default 'سنة واحدة (١٢ شهراً)',
+  start_date date not null default current_date,
+  end_date date,
+  office_location text default 'KSA',
+  status text not null default 'DRAFT' check (status in ('DRAFT','SENT','SIGNED','ACTIVE','EXPIRED','TERMINATED')),
+  signed_at timestamptz,
+  signed_by_name text,
+  signature_notes text,
+  notes text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_contracts_client_id on contracts(client_id);
+create index if not exists idx_contracts_status on contracts(status);
+create index if not exists idx_contracts_created_at on contracts(created_at desc);
+
+alter table contracts enable row level security;
+
+create policy "All authenticated read contracts" on contracts for select to authenticated using (true);
+create policy "All authenticated insert contracts" on contracts for insert to authenticated with check (true);
+create policy "All authenticated update contracts" on contracts for update to authenticated using (true);
+create policy "Admins and managers delete contracts" on contracts for delete to authenticated using (
+  exists (select 1 from profiles where id = auth.uid() and role in ('ADMIN', 'ACCOUNT_MANAGER'))
+);
+create policy "Public read contract by id" on contracts for select to anon using (true);
+create policy "Public update contract for signing" on contracts for update to anon using (true) with check (true);

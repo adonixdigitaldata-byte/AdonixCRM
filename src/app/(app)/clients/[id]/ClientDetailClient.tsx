@@ -37,6 +37,7 @@ import {
   Copy,
   Check,
   Send,
+  FileSignature,
 } from 'lucide-react'
 
 interface Props {
@@ -45,6 +46,7 @@ interface Props {
   tasks?: any[]
   invoices: any[]
   quotations: any[]
+  contracts?: any[]
   currentProfile?: any
 }
 
@@ -70,7 +72,7 @@ function convertToSAR(amount: number, currency?: string): number {
   return amount * (rates[currency ?? 'SAR'] ?? 1.0)
 }
 
-export default function ClientDetailClient({ client, profiles, tasks = [], invoices, quotations, currentProfile }: Props) {
+export default function ClientDetailClient({ client, profiles, tasks = [], invoices, quotations, contracts = [], currentProfile }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -772,6 +774,15 @@ export default function ClientDetailClient({ client, profiles, tasks = [], invoi
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {saveSuccess && <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>✓ Saved</span>}
           {error && <span style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 500 }}>✕ {error}</span>}
+
+          <Link
+            href={`/contracts/new?clientId=${client.id}`}
+            className="btn btn-outline btn-sm"
+            style={{ display: 'inline-flex', gap: 6, fontWeight: 600, borderColor: '#6366f1', color: '#4f46e5' }}
+          >
+            <FileSignature size={14} />
+            Create Contract
+          </Link>
 
           <button className="btn btn-primary btn-sm" onClick={handleSaveChanges} disabled={saving} style={{ display: 'inline-flex', gap: 6, fontWeight: 600 }}>
             <Save size={14} />
@@ -1930,6 +1941,101 @@ export default function ClientDetailClient({ client, profiles, tasks = [], invoi
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Contracts & Agreements List */}
+            <div className="card">
+              <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileSignature size={18} style={{ color: 'var(--accent)' }} />
+                  <span className="text-section-header">Contracts &amp; Agreements</span>
+                  <span className="badge badge-default" style={{ fontSize: 11 }}>{contracts.length}</span>
+                </div>
+                <Link
+                  href={`/contracts/new?clientId=${client.id}`}
+                  className="btn btn-outline btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                >
+                  <Plus size={13} />
+                  New Contract
+                </Link>
+              </div>
+
+              {contracts.length === 0 ? (
+                <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+                  No contracts created for this client yet.
+                  <div style={{ marginTop: 8 }}>
+                    <Link
+                      href={`/contracts/new?clientId=${client.id}`}
+                      className="btn btn-primary btn-sm"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Plus size={13} />
+                      Generate First Contract
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="table-wrapper">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Contract Ref</th>
+                        <th>Service Title</th>
+                        <th>Term &amp; Dates</th>
+                        <th className="num">Total Value</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right', width: 80 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contracts.map((c: any) => (
+                        <tr
+                          key={c.id}
+                          className="clickable"
+                          onClick={() => router.push(`/contracts/${c.id}`)}
+                        >
+                          <td style={{ fontWeight: 600, color: 'var(--accent)', fontFamily: 'monospace' }}>
+                            {c.contract_number}
+                          </td>
+                          <td style={{ maxWidth: 220 }}>
+                            <div style={{ fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {c.service_title}
+                            </div>
+                            <div dir="rtl" style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {c.service_title_ar}
+                            </div>
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 600 }}>{c.term_duration}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                              {c.start_date} {c.end_date ? `→ ${c.end_date}` : ''}
+                            </div>
+                          </td>
+                          <td className="num" style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>
+                            {(c.total_with_tax || c.contract_price || 0).toLocaleString()} {c.currency}
+                          </td>
+                          <td>
+                            <span className={`badge ${c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'badge-success' : c.status === 'SENT' ? 'badge-info' : 'badge-default'}`}>
+                              {c.status}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <Link
+                              href={`/contracts/${c.id}`}
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: '3px 8px', fontSize: 12 }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink size={13} /> View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* Invoices List (With search and pagination of 5) */}
