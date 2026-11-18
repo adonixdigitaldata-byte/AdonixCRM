@@ -131,12 +131,15 @@ const clientNav = [
   },
 ]
 
+// Toggle to true to temporarily hide the Contracts button from the sidebar (set back to false to restore)
+const HIDE_CONTRACTS_SIDEBAR = true
+
 export default function Sidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const nav =
+  const rawNav =
     profile.role === 'ADMIN'
       ? adminNav
       : profile.role === 'ACCOUNT_MANAGER'
@@ -146,6 +149,15 @@ export default function Sidebar({ profile }: SidebarProps) {
       : profile.role === 'CLIENT'
       ? clientNav
       : agentNav
+
+  const nav = HIDE_CONTRACTS_SIDEBAR
+    ? rawNav.map((sec) => ({
+        ...sec,
+        items: sec.items.filter(
+          (item) => item.href !== '/contracts' && item.href !== '/portal?section=contracts'
+        ),
+      }))
+    : rawNav
 
   // Close drawer on route change
   useEffect(() => {
