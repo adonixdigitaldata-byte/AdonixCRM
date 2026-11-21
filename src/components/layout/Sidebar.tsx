@@ -131,8 +131,8 @@ const clientNav = [
   },
 ]
 
-// Toggle to true to temporarily hide the Contracts button from the sidebar (set back to false to restore)
-const HIDE_CONTRACTS_SIDEBAR = true
+// Toggle to true to temporarily hide the Contracts button from the sidebar (set to false to display)
+const HIDE_CONTRACTS_SIDEBAR = false
 
 export default function Sidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
