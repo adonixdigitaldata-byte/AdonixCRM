@@ -588,6 +588,10 @@ export default function ClientPortalClient({
                                 ? 'badge-success'
                                 : c.status === 'SENT'
                                 ? 'badge-info'
+                                : c.status === 'TERMINATED'
+                                ? 'badge-danger'
+                                : c.status === 'EXPIRED'
+                                ? 'badge-warning'
                                 : 'badge-default'
                             }`}
                             style={{ fontSize: 11 }}
@@ -607,12 +611,12 @@ export default function ClientPortalClient({
                         <Link
                           href={`/contracts/view/${c.id}?from=portal`}
                           className={`btn btn-sm ${
-                            c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'btn-outline' : 'btn-primary'
+                            (c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at ? 'btn-primary' : 'btn-outline'
                           }`}
                           style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                         >
                           <Eye size={13} />
-                          {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign'}
+                          {(c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at ? 'Review & Sign' : 'View Agreement'}
                         </Link>
                       </div>
                     </div>
@@ -897,6 +901,10 @@ export default function ClientPortalClient({
                                       ? 'badge-success'
                                       : c.status === 'SENT'
                                       ? 'badge-info'
+                                      : c.status === 'TERMINATED'
+                                      ? 'badge-danger'
+                                      : c.status === 'EXPIRED'
+                                      ? 'badge-warning'
                                       : 'badge-default'
                                   }`}
                                   style={{ fontSize: 11 }}
@@ -908,14 +916,14 @@ export default function ClientPortalClient({
                                 <Link
                                   href={`/contracts/view/${c.id}?from=portal`}
                                   className={`btn btn-sm ${
-                                    c.status === 'SIGNED' || c.status === 'ACTIVE'
-                                      ? 'btn-outline'
-                                      : 'btn-primary'
+                                    (c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at
+                                      ? 'btn-primary'
+                                      : 'btn-outline'
                                   }`}
                                   style={{ fontSize: 12, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                                 >
                                   <Eye size={13} />
-                                  {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign'}
+                                  {(c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at ? 'Review & Sign' : 'View Agreement'}
                                 </Link>
                               </td>
                             </tr>
@@ -947,6 +955,10 @@ export default function ClientPortalClient({
                                   ? 'badge-success'
                                   : c.status === 'SENT'
                                   ? 'badge-info'
+                                  : c.status === 'TERMINATED'
+                                  ? 'badge-danger'
+                                  : c.status === 'EXPIRED'
+                                  ? 'badge-warning'
                                   : 'badge-default'
                               }`}
                             >
@@ -962,13 +974,13 @@ export default function ClientPortalClient({
                           <Link
                             href={`/contracts/view/${c.id}?from=portal`}
                             className={`btn btn-sm ${
-                              c.status === 'SIGNED' || c.status === 'ACTIVE'
-                                ? 'btn-outline'
-                                : 'btn-primary'
+                              (c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at
+                                ? 'btn-primary'
+                                : 'btn-outline'
                             }`}
                             style={{ width: '100%', justifyContent: 'center' }}
                           >
-                            {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign Contract'}
+                            {(c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at ? 'Review & Sign Contract' : 'View Agreement'}
                           </Link>
                         </div>
                       ))}
@@ -1030,7 +1042,17 @@ export default function ClientPortalClient({
                               {(c.total_with_tax || c.contract_price || 0).toLocaleString()} {c.currency}
                             </td>
                             <td>
-                              <span className={`badge ${c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'badge-success' : c.status === 'SENT' ? 'badge-info' : 'badge-default'}`}>
+                              <span className={`badge ${
+                                c.status === 'SIGNED' || c.status === 'ACTIVE'
+                                  ? 'badge-success'
+                                  : c.status === 'SENT'
+                                  ? 'badge-info'
+                                  : c.status === 'TERMINATED'
+                                  ? 'badge-danger'
+                                  : c.status === 'EXPIRED'
+                                  ? 'badge-warning'
+                                  : 'badge-default'
+                              }`}>
                                 {c.status}
                               </span>
                             </td>
@@ -1038,13 +1060,13 @@ export default function ClientPortalClient({
                               <Link
                                 href={`/contracts/view/${c.id}?from=portal`}
                                 className={`btn btn-sm ${
-                                  c.status === 'SIGNED' || c.status === 'ACTIVE'
-                                    ? 'btn-outline'
-                                    : 'btn-primary'
+                                  (c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at
+                                    ? 'btn-primary'
+                                    : 'btn-outline'
                                 }`}
                                 style={{ fontSize: 12, padding: '4px 8px' }}
                               >
-                                {c.status === 'SIGNED' || c.status === 'ACTIVE' ? 'View Agreement' : 'Review & Sign'}
+                                {(c.status === 'DRAFT' || c.status === 'SENT') && !c.signed_at ? 'Review & Sign' : 'View Agreement'}
                               </Link>
                             </td>
                           </tr>

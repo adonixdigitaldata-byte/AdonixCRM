@@ -167,8 +167,8 @@ export default function StandardContractTemplate({
               alignItems: 'center',
               marginBottom: 16,
               padding: '8px 14px',
-              background: isSigned ? '#ecfdf5' : '#f1f5f9',
-              border: `1px solid ${isSigned ? '#a7f3d0' : '#cbd5e1'}`,
+              background: isSigned ? '#ecfdf5' : contract.status === 'TERMINATED' ? '#fef2f2' : '#f1f5f9',
+              border: `1px solid ${isSigned ? '#a7f3d0' : contract.status === 'TERMINATED' ? '#fecaca' : '#cbd5e1'}`,
               borderRadius: 6,
               fontSize: 11.5,
             }}
@@ -176,10 +176,12 @@ export default function StandardContractTemplate({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {isSigned ? (
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              ) : contract.status === 'TERMINATED' ? (
+                <span style={{ height: 8, width: 8, borderRadius: '50%', background: '#dc2626' }} />
               ) : (
                 <span style={{ height: 8, width: 8, borderRadius: '50%', background: '#6366f1' }} />
               )}
-              <span style={{ fontWeight: 700, color: isSigned ? '#065f46' : '#334155' }}>
+              <span style={{ fontWeight: 700, color: isSigned ? '#065f46' : contract.status === 'TERMINATED' ? '#b91c1c' : '#334155' }}>
                 Contract Status / حالة العقد: {contract.status}
               </span>
             </div>
@@ -655,30 +657,47 @@ export default function StandardContractTemplate({
                 </div>
 
                 {/* Client Signature Area */}
-                {isSigned ? (
+                {Boolean(contract.signed_at) ? (
                   <div
                     style={{
-                      border: '1.5px solid #10b981',
+                      border: contract.status === 'TERMINATED' ? '1.5px solid #fca5a5' : '1.5px solid #10b981',
                       borderRadius: 6,
                       padding: '8px 10px',
-                      background: '#ecfdf5',
+                      background: contract.status === 'TERMINATED' ? '#fef2f2' : '#ecfdf5',
                       marginBottom: 8,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      <span style={{ fontSize: 11.5, fontWeight: 800, color: '#065f46' }}>
-                        Digitally Signed &amp; Accepted
+                      <CheckCircle2 className={`h-4 w-4 ${contract.status === 'TERMINATED' ? 'text-red-600' : 'text-emerald-600'}`} />
+                      <span style={{ fontSize: 11.5, fontWeight: 800, color: contract.status === 'TERMINATED' ? '#991b1b' : '#065f46' }}>
+                        {contract.status === 'TERMINATED' ? 'Digitally Signed (Contract Terminated)' : 'Digitally Signed & Accepted'}
                       </span>
                     </div>
-                    <div style={{ fontSize: 10.5, color: '#047857' }}>
+                    <div style={{ fontSize: 10.5, color: contract.status === 'TERMINATED' ? '#b91c1c' : '#047857' }}>
                       Signed by: <strong>{contract.signed_by_name || contract.client_name}</strong>
                     </div>
                     {contract.signed_at && (
-                      <div style={{ fontSize: 9.5, color: '#059669' }}>
+                      <div style={{ fontSize: 9.5, color: contract.status === 'TERMINATED' ? '#dc2626' : '#059669' }}>
                         Timestamp: {format(new Date(contract.signed_at), 'yyyy-MM-dd HH:mm:ss')}
                       </div>
                     )}
+                  </div>
+                ) : contract.status === 'TERMINATED' ? (
+                  <div
+                    style={{
+                      border: '1.5px dashed #fca5a5',
+                      borderRadius: 6,
+                      padding: '16px 10px',
+                      background: '#fef2f2',
+                      textAlign: 'center',
+                      marginBottom: 8,
+                      color: '#b91c1c',
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Contract Terminated — Void for Signature<br />
+                    <span dir="rtl" style={{ fontSize: 10, fontWeight: 500 }}>عقد مفسوخ / لا يمكن التوقيع عليه</span>
                   </div>
                 ) : (
                   <div

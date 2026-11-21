@@ -12,6 +12,27 @@ export async function POST(
       return NextResponse.json({ error: 'Contract not found' }, { status: 404 })
     }
 
+    if (contract.status === 'TERMINATED') {
+      return NextResponse.json(
+        { error: 'This contract has been terminated and can no longer be signed.' },
+        { status: 400 }
+      )
+    }
+
+    if (contract.status === 'EXPIRED') {
+      return NextResponse.json(
+        { error: 'This contract has expired and can no longer be signed.' },
+        { status: 400 }
+      )
+    }
+
+    if (contract.status === 'SIGNED' || contract.status === 'ACTIVE') {
+      return NextResponse.json(
+        { error: 'This contract has already been signed.' },
+        { status: 400 }
+      )
+    }
+
     const body = await req.json()
     const { signatoryName, signatoryTitle, signatureNotes } = body
 

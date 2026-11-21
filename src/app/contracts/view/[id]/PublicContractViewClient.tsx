@@ -37,6 +37,9 @@ export default function PublicContractViewClient({ initialContract, fromPortal =
   const [signError, setSignError] = useState<string | null>(null)
 
   const isSigned = contract.status === 'SIGNED' || contract.status === 'ACTIVE'
+  const isTerminated = contract.status === 'TERMINATED'
+  const isExpired = contract.status === 'EXPIRED'
+  const canSign = (contract.status === 'DRAFT' || contract.status === 'SENT') && !contract.signed_at
 
   function handlePrint() {
     const originalTitle = document.title
@@ -151,8 +154,8 @@ export default function PublicContractViewClient({ initialContract, fromPortal =
               Print / Save PDF
             </button>
 
-            {/* Accept & Sign Button (if not yet signed) */}
-            {!isSigned ? (
+            {/* Action / Status Display */}
+            {canSign ? (
               <button
                 type="button"
                 onClick={() => setShowSignModal(true)}
@@ -170,6 +173,15 @@ export default function PublicContractViewClient({ initialContract, fromPortal =
                 <FileCheck size={14} />
                 Accept &amp; Sign Contract (قبول وتوقيع العقد)
               </button>
+            ) : isTerminated ? (
+              <span className="badge badge-danger" style={{ fontSize: 12, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}>
+                <X size={14} />
+                Contract Terminated (عقد مفسوخ / منتهي)
+              </span>
+            ) : isExpired ? (
+              <span className="badge badge-warning" style={{ fontSize: 12, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                Expired (منتهي الصلاحية)
+              </span>
             ) : (
               <span className="badge badge-success" style={{ fontSize: 12, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <CheckCircle2 size={14} />
@@ -182,8 +194,44 @@ export default function PublicContractViewClient({ initialContract, fromPortal =
 
       {/* Main Document Content */}
       <main style={{ maxWidth: 1040, margin: '20px auto 0', padding: '0 16px' }}>
-        {/* Verification banner if already signed */}
-        {isSigned && (
+        {/* Banner if contract is terminated */}
+        {isTerminated && (
+          <div
+            className="no-print"
+            style={{
+              marginBottom: 20,
+              padding: '14px 18px',
+              borderRadius: 'var(--radius)',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#991b1b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <X size={22} style={{ color: '#dc2626', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>
+                  Agreement Terminated (تم إنهاء وفسخ هذا العقد رسمياً)
+                </div>
+                <div style={{ fontSize: 12, color: '#b91c1c' }}>
+                  This contract is terminated and is no longer active. Digital signing is closed.
+                </div>
+              </div>
+            </div>
+
+            <span style={{ fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 9999, background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' }}>
+              Status: TERMINATED
+            </span>
+          </div>
+        )}
+
+        {/* Verification banner if already signed and active */}
+        {isSigned && !isTerminated && (
           <div
             className="no-print"
             style={{
